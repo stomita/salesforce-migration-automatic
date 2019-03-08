@@ -4,13 +4,15 @@ import { SerializedUploader } from "../src";
 import jsforce, { Connection } from "jsforce";
 
 const username = process.env.SF_USERNAME;
+const conn: Connection = (jsforce as any).registry.getConnection(username);
 
 /**
  *
  */
 describe("SerializedUploader", () => {
+  jest.setTimeout(100000);
+
   it("should upload empty data", async () => {
-    const conn = new Connection({});
     const su = new SerializedUploader(conn);
     const { successes, failures } = await su.upload();
     expect(successes).toBeDefined();
@@ -20,7 +22,8 @@ describe("SerializedUploader", () => {
   });
 
   it("should upload data from csv", async () => {
-    const conn: Connection = (jsforce as any).registry.getConnection(username);
+    const accCnt = await conn.sobject("Account").count();
+    const oppCnt = await conn.sobject("Opportunity").count();
     const su = new SerializedUploader(conn);
     const dataDir = path.join(__dirname, "fixtures", "csv");
     const filenames = await fs.readdir(dataDir);
@@ -28,12 +31,32 @@ describe("SerializedUploader", () => {
       console.log(filename);
       const sobject = filename.split(".")[0];
       const data = await fs.readFile(path.join(dataDir, filename), "utf8");
-      console.log(sobject, data);
+      await su.loadCSVData(sobject, data);
     }
     const { successes, failures } = await su.upload();
     expect(successes).toBeDefined();
-    expect(successes.length).toBe(0);
+    expect(successes.length).toBeGreaterThan(0);
     expect(failures).toBeDefined();
     expect(failures.length).toBe(0);
+    const newAccCnt = await conn.sobject("Account").count();
+    expect(newAccCnt).toBeGreaterThan(accCnt);
+    const newOppCnt = await conn.sobject("Opportunity").count();
+    expect(newOppCnt).toBeGreaterThan(oppCnt);
+  });
+
+  afterAll(async () => {
+    for (const sobject of [
+      "Task",
+      "Lead",
+      "Case",
+      "Opportunity",
+      "Contact",
+      "Account"
+    ]) {
+      await conn
+        .sobject(sobject)
+        .find({}, "Id")
+        .destroy();
+    }
   });
 });

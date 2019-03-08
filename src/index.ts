@@ -1,5 +1,6 @@
 import EventEmitter from "events";
 import { Connection } from "jsforce";
+import parse from "csv-parse";
 
 type SObjectFieldDescription = {
   name: string;
@@ -206,7 +207,9 @@ export class SerializedUploader extends EventEmitter {
   private async uploadRecords(uploadings: Record<string, RecordIdPair[]>) {
     for (const [table, recordIdPairs] of Object.entries(uploadings)) {
       const records = recordIdPairs.map(({ record }) => record);
-      const rets = await this._conn.sobject(table).create(records);
+      const rets = await this._conn
+        .sobject(table)
+        .create(records, { allowRecursive: true } as any);
       if (Array.isArray(rets)) {
         rets.forEach((ret, i) => {
           const origId = recordIdPairs[i].id;
@@ -215,7 +218,7 @@ export class SerializedUploader extends EventEmitter {
             this._idMap[origId] = ret.id;
             this._successes.push([origId, ret.id]);
           } else {
-            this._failures.push([origId, ret]);
+            this._failures.push([origId, ret.errors]);
           }
         });
       }
@@ -248,5 +251,20 @@ export class SerializedUploader extends EventEmitter {
       this.emit("complete");
       return { successes, failures };
     }
+  }
+
+  async loadCSVData(table: string, csvData: string, options: Object = {}) {
+    const [headers, ...rows] = await new Promise<string[][]>(
+      (resolve, reject) => {
+        parse(csvData, options, (err: Error | undefined, rets: string[][]) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(rets);
+          }
+        });
+      }
+    );
+    this._dataMap[table] = { headers, rows };
   }
 }

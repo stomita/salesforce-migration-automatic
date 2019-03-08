@@ -11,9 +11,11 @@
     "test": "jest"
   },
   "dependencies": {
+    "csv-parse": "^4.3.3",
     "jsforce": "^1.9.1"
   },
   "devDependencies": {
+    "@types/csv-parse": "^1.1.12",
     "@types/fs-extra": "^5.0.5",
     "@types/jest": "^24.0.9",
     "@types/jsforce": "^1.9.5",
@@ -25,6 +27,7 @@
     "fs-extra": "^7.0.1",
     "jest": "^24.3.1",
     "prettier": "^1.16.4",
+    "sfdx-cli": "^6.56.0",
     "ts-jest": "^24.0.0",
     "typescript": "^3.3.3333"
   }
