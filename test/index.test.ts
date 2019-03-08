@@ -50,6 +50,7 @@ describe("SerializedUploader", () => {
     expect(successes).toBeDefined();
     expect(successes.length).toBeGreaterThan(0);
     expect(failures).toBeDefined();
+    failures.forEach(failure => console.log(failure));
     expect(failures.length).toBe(0);
     const newAccCnt = await conn.sobject("Account").count();
     expect(newAccCnt).toBeGreaterThan(accCnt);
