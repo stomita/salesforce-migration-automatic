@@ -1,0 +1,38 @@
+version: 2
+jobs:
+  build:
+    working_directory: ~/workspace
+    docker:
+      - image: circleci/node:lts
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - npm-deps-{{ checksum "package-lock.json" }}
+            - npm-deps-
+      - run:
+          name: Install Deps
+          command: |
+            npm install
+      - run:
+          name: Create Hub Key
+          command: |
+            mkdir keys
+            echo ${DEVHUB_SERVER_KEY} | xxd -r -ps >> keys/server.key
+      - run:
+          name: Setup Scratch Org
+          command: |
+            sfdx force:auth:jwt:grant -i ${DEVHUB_CLIENT_ID} -f keys/server.key -u ${DEVHUB_USERNAME} -s -a hub
+            sfdx force:org:create -s -f config/project-scratch-def.json -a circle_build_${CIRCLE_BUILD_NUM} --wait 5 
+      - run:
+          name: Test
+          command: |
+            SFDX_USERNAME=circle_build_${CIRCLE_BUILD_NUM} npm run test
+      - run:
+          name: Delete Useless Scratch Org
+          command: |
+            sfdx force:org:delete -u circle_build_${CIRCLE_BUILD_NUM} -p
+      - save_cache:
+          key: npm-deps-{{ checksum "package-lock.json" }}
+          paths:
+            - ~/workspace/node_modules
