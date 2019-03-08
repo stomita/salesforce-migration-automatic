@@ -1,0 +1,11 @@
+{
+  "orgName": "TestOrg",
+  "country": "JP",
+  "edition": "Developer",
+  "hasSampleData": "false",
+  "settings": {
+    "orgPreferenceSettings": {
+      "s1DesktopEnabled": true
+    }
+  }
+}
