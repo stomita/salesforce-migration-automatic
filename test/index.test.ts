@@ -1,16 +1,20 @@
 import path from "path";
 import fs from "fs-extra";
 import { SerializedUploader } from "../src";
-import jsforce, { Connection } from "jsforce";
+import { Connection } from "jsforce";
+import { getConnection } from "./util/getConnection";
 
-const username = process.env.SF_USERNAME;
-const conn: Connection = (jsforce as any).registry.getConnection(username);
+let conn: Connection;
 
 /**
  *
  */
 describe("SerializedUploader", () => {
   jest.setTimeout(100000);
+
+  beforeAll(async () => {
+    conn = await getConnection();
+  });
 
   it("should upload empty data", async () => {
     const su = new SerializedUploader(conn);
