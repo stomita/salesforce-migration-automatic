@@ -18,7 +18,7 @@ jobs:
           name: Create Hub Key
           command: |
             mkdir keys
-            echo ${DEVHUB_SERVER_KEY} | xxd -r -ps >> keys/server.key
+            echo ${DEVHUB_SERVER_KEY_BASE64} | base64 -d >> keys/server.key
       - run:
           name: Setup Scratch Org
           command: |
