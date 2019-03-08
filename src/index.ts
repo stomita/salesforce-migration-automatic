@@ -26,6 +26,7 @@ type RecordIdPair = {
 };
 
 type UploadResult = {
+  totalCount: number;
   successes: Array<[string, string]>;
   failures: Array<[string, any]>;
 };
