@@ -225,7 +225,19 @@ export class SerializedUploader extends EventEmitter {
     }
   }
 
+  calcTotalUploadCount() {
+    let totalCount = 0;
+    for (const table of Object.keys(this._dataMap)) {
+      const dataset = this._dataMap[table];
+      if (dataset) {
+        totalCount += dataset.rows.length;
+      }
+    }
+    return totalCount;
+  }
+
   async upload(): Promise<UploadResult> {
+    const totalCount = this.calcTotalUploadCount();
     // array of sobj and recordId (old) pair
     const uploadings: Record<string, RecordIdPair[]> = {};
     for (const table of Object.keys(this._dataMap)) {
@@ -240,16 +252,16 @@ export class SerializedUploader extends EventEmitter {
     if (Object.keys(uploadings).length > 0) {
       await this.uploadRecords(uploadings);
       // event notification;
-      const successes = this._successes;
-      const failures = this._failures;
-      this.emit("uploadProgress", { successes, failures });
+      const successCount = this._successes.length;
+      const failureCount = this._failures.length;
+      this.emit("uploadProgress", { totalCount, successCount, failureCount });
       // recursive call
       return this.upload();
     } else {
       const successes = this._successes;
       const failures = this._failures;
       this.emit("complete");
-      return { successes, failures };
+      return { totalCount, successes, failures };
     }
   }
 

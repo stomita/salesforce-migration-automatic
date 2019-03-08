@@ -33,6 +33,16 @@ describe("SerializedUploader", () => {
       const data = await fs.readFile(path.join(dataDir, filename), "utf8");
       await su.loadCSVData(sobject, data);
     }
+    su.on("uploadProgress", ({ totalCount, successCount, failureCount }) => {
+      console.log(
+        "total: ",
+        totalCount,
+        "successes: ",
+        successCount,
+        "failures: ",
+        failureCount
+      );
+    });
     const { successes, failures } = await su.upload();
     expect(successes).toBeDefined();
     expect(successes.length).toBeGreaterThan(0);
