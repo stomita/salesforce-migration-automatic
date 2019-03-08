@@ -10,7 +10,7 @@ let conn: Connection;
  *
  */
 describe("SerializedUploader", () => {
-  jest.setTimeout(100000);
+  jest.setTimeout(300000);
 
   beforeAll(async () => {
     conn = await getConnection();
