@@ -46,7 +46,7 @@ export class SerializedUploader extends EventEmitter {
     this._conn = conn;
   }
 
-  async describe(table: string) {
+  private async describe(table: string) {
     return new Promise<SObjectDescription>((resolve, reject) => {
       this._conn.describe$(table, (err: Error, ret: SObjectDescription) => {
         if (err) {
@@ -58,13 +58,13 @@ export class SerializedUploader extends EventEmitter {
     });
   }
 
-  async getFieldDef(table: string, fname: string) {
+  private async getFieldDef(table: string, fname: string) {
     const { fields } = await this.describe(table);
     const fnameUpper = fname.toUpperCase();
     return fields.find(f => f.name.toUpperCase() === fnameUpper);
   }
 
-  async getType(table: string, fname: string) {
+  private async getType(table: string, fname: string) {
     var f = await this.getFieldDef(table, fname);
     return f ? f.type : undefined;
   }
@@ -75,11 +75,11 @@ export class SerializedUploader extends EventEmitter {
     }
   }
 
-  isTargetedUpload() {
+  private isTargetedUpload() {
     return Object.keys(this._target).length > 0;
   }
 
-  async filterUploadableRecords(table: string) {
+  private async filterUploadableRecords(table: string) {
     const dataset = this._dataMap[table];
     if (!dataset) {
       throw new Error(`No dataset is loaded for: ${table}`);
@@ -141,7 +141,7 @@ export class SerializedUploader extends EventEmitter {
     return uploadables;
   }
 
-  async convertToRecordIdPair(table: string, row: string[]) {
+  private async convertToRecordIdPair(table: string, row: string[]) {
     let id: string | undefined;
     const record: Record<string, any> = {};
     const dataset = this._dataMap[table];
@@ -203,7 +203,7 @@ export class SerializedUploader extends EventEmitter {
     return { id, record };
   }
 
-  async uploadRecords(uploadings: Record<string, RecordIdPair[]>) {
+  private async uploadRecords(uploadings: Record<string, RecordIdPair[]>) {
     for (const [table, recordIdPairs] of Object.entries(uploadings)) {
       const records = recordIdPairs.map(({ record }) => record);
       const rets = await this._conn.sobject(table).create(records);
@@ -239,13 +239,13 @@ export class SerializedUploader extends EventEmitter {
       // event notification;
       const successes = this._successes;
       const failures = this._failures;
-      this.emit("UploadProgress", { successes, failures });
+      this.emit("uploadProgress", { successes, failures });
       // recursive call
       return this.upload();
     } else {
       const successes = this._successes;
       const failures = this._failures;
-      this.emit("Complete");
+      this.emit("complete");
       return { successes, failures };
     }
   }
