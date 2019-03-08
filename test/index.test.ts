@@ -28,7 +28,6 @@ describe("SerializedUploader", () => {
     const dataDir = path.join(__dirname, "fixtures", "csv");
     const filenames = await fs.readdir(dataDir);
     for (const filename of filenames) {
-      console.log(filename);
       const sobject = filename.split(".")[0];
       const data = await fs.readFile(path.join(dataDir, filename), "utf8");
       await su.loadCSVData(sobject, data);

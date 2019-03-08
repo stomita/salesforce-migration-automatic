@@ -36,6 +36,7 @@ type UploadResult = {
  * class automatically resolves inter-record dependencies.
  */
 export class SerializedUploader extends EventEmitter {
+  private _described: Record<string, Promise<SObjectDescription>> = {};
   private _dataMap: Record<string, LoadData | undefined> = {};
   private _idMap: Record<string, any> = {};
   private _target: Record<string, boolean> = {};
@@ -49,15 +50,12 @@ export class SerializedUploader extends EventEmitter {
   }
 
   private async describe(table: string) {
-    return new Promise<SObjectDescription>((resolve, reject) => {
-      this._conn.describe$(table, (err: Error, ret: SObjectDescription) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(ret);
-        }
-      });
-    });
+    let described = this._described[table];
+    if (!described) {
+      described = this._conn.describe(table);
+      this._described[table] = described;
+    }
+    return described;
   }
 
   private async getFieldDef(table: string, fname: string) {
@@ -226,7 +224,7 @@ export class SerializedUploader extends EventEmitter {
     }
   }
 
-  calcTotalUploadCount() {
+  private calcTotalUploadCount() {
     let totalCount = 0;
     for (const table of Object.keys(this._dataMap)) {
       const dataset = this._dataMap[table];
@@ -237,8 +235,7 @@ export class SerializedUploader extends EventEmitter {
     return totalCount;
   }
 
-  async upload(): Promise<UploadResult> {
-    const totalCount = this.calcTotalUploadCount();
+  private async uploadInternal(totalCount: number): Promise<UploadResult> {
     // array of sobj and recordId (old) pair
     const uploadings: Record<string, RecordIdPair[]> = {};
     for (const table of Object.keys(this._dataMap)) {
@@ -257,13 +254,18 @@ export class SerializedUploader extends EventEmitter {
       const failureCount = this._failures.length;
       this.emit("uploadProgress", { totalCount, successCount, failureCount });
       // recursive call
-      return this.upload();
+      return this.uploadInternal(totalCount);
     } else {
       const successes = this._successes;
       const failures = this._failures;
       this.emit("complete");
       return { totalCount, successes, failures };
     }
+  }
+
+  async upload() {
+    const totalCount = this.calcTotalUploadCount();
+    return this.uploadInternal(totalCount);
   }
 
   async loadCSVData(table: string, csvData: string, options: Object = {}) {
