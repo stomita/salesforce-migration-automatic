@@ -23,6 +23,7 @@ jobs:
       - run:
           name: Setup Scratch Org
           command: |
+            echo $PATH
             sfdx force:auth:jwt:grant -i ${DEVHUB_CLIENT_ID} -f keys/server.key -u ${DEVHUB_USERNAME} -s -a hub
             sfdx force:org:create -s -f config/project-scratch-def.json -a circle_build_${CIRCLE_BUILD_NUM} --wait 5 
       - run:
