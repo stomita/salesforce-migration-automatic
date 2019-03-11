@@ -44,7 +44,7 @@ type DumpQuery = {
  * Import other org data, exported from salesforce.com (via DataLoader) This
  * class automatically resolves inter-record dependencies.
  */
-export class SerializedUploader extends EventEmitter {
+export class AutoMigrator extends EventEmitter {
   private _described: Record<string, Promise<SObjectDescription>> = {};
   private _dataMap: Record<string, LoadData | undefined> = {};
   private _idMap: Record<string, any> = {};
@@ -272,11 +272,21 @@ export class SerializedUploader extends EventEmitter {
     }
   }
 
+  /**
+   * Upload Current loaded content to
+   */
   async upload() {
     const totalCount = this.calcTotalUploadCount();
     return this.uploadInternal(totalCount);
   }
 
+  /**
+   * Load CSV text data in memory in order to upload to Salesforce
+   *
+   * @param table
+   * @param csvData
+   * @param options
+   */
   async loadCSVData(table: string, csvData: string, options: Object = {}) {
     const [headers, ...rows] = await new Promise<string[][]>(
       (resolve, reject) => {
@@ -292,6 +302,10 @@ export class SerializedUploader extends EventEmitter {
     this._dataMap[table] = { headers, rows };
   }
 
+  /**
+   * Dump the record data as CSV
+   * @param queries
+   */
   async dumpAsCSVData(queries: DumpQuery[]) {
     const objectMap = queries.reduce(
       (map, { object }) => ({ ...map, [object.toLowerCase()]: true }),

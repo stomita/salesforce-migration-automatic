@@ -1,6 +1,6 @@
 import path from "path";
 import fs from "fs-extra";
-import { SerializedUploader } from "../src";
+import { AutoMigrator } from "../src";
 import { Connection } from "jsforce";
 import { getConnection } from "./util/getConnection";
 
@@ -17,8 +17,8 @@ describe("SerializedUploader", () => {
   });
 
   it("should upload empty data", async () => {
-    const su = new SerializedUploader(conn);
-    const { successes, failures } = await su.upload();
+    const am = new AutoMigrator(conn);
+    const { successes, failures } = await am.upload();
     expect(successes).toBeDefined();
     expect(successes.length).toBe(0);
     expect(failures).toBeDefined();
@@ -28,15 +28,15 @@ describe("SerializedUploader", () => {
   it("should upload data from csv", async () => {
     const accCnt = await conn.sobject("Account").count();
     const oppCnt = await conn.sobject("Opportunity").count();
-    const su = new SerializedUploader(conn);
+    const am = new AutoMigrator(conn);
     const dataDir = path.join(__dirname, "fixtures", "csv");
     const filenames = await fs.readdir(dataDir);
     for (const filename of filenames) {
       const sobject = filename.split(".")[0];
       const data = await fs.readFile(path.join(dataDir, filename), "utf8");
-      await su.loadCSVData(sobject, data);
+      await am.loadCSVData(sobject, data);
     }
-    su.on("uploadProgress", ({ totalCount, successCount, failureCount }) => {
+    am.on("uploadProgress", ({ totalCount, successCount, failureCount }) => {
       console.log(
         "total: ",
         totalCount,
@@ -46,7 +46,7 @@ describe("SerializedUploader", () => {
         failureCount
       );
     });
-    const { successes, failures } = await su.upload();
+    const { successes, failures } = await am.upload();
     expect(successes).toBeDefined();
     expect(successes.length).toBeGreaterThan(0);
     expect(failures).toBeDefined();
@@ -59,7 +59,7 @@ describe("SerializedUploader", () => {
   });
 
   it("should download data as csv", async () => {
-    const su = new SerializedUploader(conn);
+    const am = new AutoMigrator(conn);
     const dataDir = path.join(__dirname, "fixtures", "csv");
     const filenames = await fs.readdir(dataDir);
     const queries = [];
@@ -67,7 +67,7 @@ describe("SerializedUploader", () => {
       const object = filename.split(".")[0];
       queries.push({ object });
     }
-    const csvs = await su.dumpAsCSVData(queries);
+    const csvs = await am.dumpAsCSVData(queries);
     expect(csvs).toBeDefined();
     expect(csvs.length).toBe(queries.length);
     for (const csv of csvs) {

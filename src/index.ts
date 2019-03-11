@@ -1,4 +1,4 @@
 /**
  *
  */
-export * from "./SerializedUploader";
+export * from "./AutoMigrator";
