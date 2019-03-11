@@ -7,6 +7,7 @@ type SObjectFieldDescription = {
   type: string;
   label: string;
   createable: boolean;
+  referenceTo?: string[] | null | undefined;
 };
 
 type SObjectDescription = {
@@ -29,6 +30,14 @@ type UploadResult = {
   totalCount: number;
   successes: Array<[string, string]>;
   failures: Array<[string, any]>;
+};
+
+type DumpQuery = {
+  object: string;
+  condition?: string;
+  orderby?: string;
+  limit?: number;
+  offset?: number;
 };
 
 /*
@@ -281,5 +290,51 @@ export class SerializedUploader extends EventEmitter {
       }
     );
     this._dataMap[table] = { headers, rows };
+  }
+
+  async dumpAsCSVData(queries: DumpQuery[]) {
+    const objectMap = queries.reduce(
+      (map, { object }) => ({ ...map, [object.toLowerCase()]: true }),
+      {} as Record<string, boolean>
+    );
+    return Promise.all(
+      queries.map(async ({ object, condition, orderby, limit, offset }) => {
+        let { fields } = await this.describe(object);
+        fields = fields.filter(f => {
+          if (f.type === "id") {
+            return true;
+          }
+          if (!f.createable) {
+            return false;
+          }
+          if (f.type === "reference") {
+            return (
+              (f.referenceTo || []).find(r => objectMap[r.toLowerCase()]) !=
+              null
+            );
+          }
+          return true;
+        });
+        const soql = [
+          `SELECT ${fields.map(f => f.name).join(", ")} FROM ${object}`,
+          condition ? ` WHERE ${condition}` : "",
+          orderby ? ` ORDER BY ${orderby}` : "",
+          limit ? ` LIMIT ${limit}` : "",
+          offset ? ` OFFSET ${offset}` : ""
+        ].join("");
+        return new Promise(async (resolve, reject) => {
+          const bufs: any[] = [];
+          (this._conn.query(soql) as any)
+            .stream()
+            .on("data", (data: any) => {
+              bufs.push(data);
+            })
+            .on("end", () => {
+              resolve(Buffer.concat(bufs).toString("utf8"));
+            })
+            .on("error", (err: Error) => reject(err));
+        });
+      })
+    );
   }
 }

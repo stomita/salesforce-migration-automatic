@@ -58,6 +58,23 @@ describe("SerializedUploader", () => {
     expect(newOppCnt).toBeGreaterThan(oppCnt);
   });
 
+  it("should download data as csv", async () => {
+    const su = new SerializedUploader(conn);
+    const dataDir = path.join(__dirname, "fixtures", "csv");
+    const filenames = await fs.readdir(dataDir);
+    const queries = [];
+    for (const filename of filenames) {
+      const object = filename.split(".")[0];
+      queries.push({ object });
+    }
+    const csvs = await su.dumpAsCSVData(queries);
+    expect(csvs).toBeDefined();
+    expect(csvs.length).toBe(queries.length);
+    for (const csv of csvs) {
+      expect(typeof csv).toBe("string");
+    }
+  });
+
   afterAll(async () => {
     for (const sobject of [
       "Task",
