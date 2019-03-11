@@ -21,6 +21,10 @@ jobs:
             mkdir keys
             echo ${DEVHUB_SERVER_KEY_BASE64} | base64 -d >> keys/server.key
       - run:
+          name: Lint
+          command: |
+            npm run lint
+      - run:
           name: Build
           command: |
             npm run build
