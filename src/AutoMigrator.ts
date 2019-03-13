@@ -26,13 +26,13 @@ type RecordIdPair = {
   record: Record<string, any>;
 };
 
-type UploadResult = {
+export type UploadResult = {
   totalCount: number;
   successes: Array<[string, string]>;
   failures: Array<[string, any]>;
 };
 
-type DumpQuery = {
+export type DumpQuery = {
   object: string;
   condition?: string;
   orderby?: string;
@@ -336,7 +336,7 @@ export class AutoMigrator extends EventEmitter {
           limit ? ` LIMIT ${limit}` : "",
           offset ? ` OFFSET ${offset}` : ""
         ].join("");
-        return new Promise(async (resolve, reject) => {
+        return new Promise<string>(async (resolve, reject) => {
           const bufs: any[] = [];
           (this._conn.query(soql) as any)
             .stream()
