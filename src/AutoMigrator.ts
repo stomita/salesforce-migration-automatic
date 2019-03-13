@@ -1,4 +1,4 @@
-import EventEmitter from "events";
+import { EventEmitter } from "events";
 import { Connection } from "jsforce";
 import parse from "csv-parse";
 
