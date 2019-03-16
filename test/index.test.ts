@@ -1,20 +1,22 @@
 import path from "path";
 import fs from "fs-extra";
-import { AutoMigrator } from "../src";
+import { AutoMigrator, DumpQuery } from "../src";
 import { Connection } from "jsforce";
 import { getConnection } from "./util/getConnection";
 
 let conn: Connection;
+
+beforeAll(async () => {
+  conn = await getConnection();
+  conn.bulk.pollInterval = 50000;
+  conn.bulk.pollTimeout = 300000;
+});
 
 /**
  *
  */
 describe("SerializedUploader", () => {
   jest.setTimeout(300000);
-
-  beforeAll(async () => {
-    conn = await getConnection();
-  });
 
   it("should upload empty data", async () => {
     const am = new AutoMigrator(conn);
@@ -60,13 +62,15 @@ describe("SerializedUploader", () => {
 
   it("should download data as csv", async () => {
     const am = new AutoMigrator(conn);
-    const dataDir = path.join(__dirname, "fixtures", "csv");
-    const filenames = await fs.readdir(dataDir);
-    const queries = [];
-    for (const filename of filenames) {
-      const object = filename.split(".")[0];
-      queries.push({ object });
-    }
+    const queries: DumpQuery[] = [
+      { object: "Account", target: "query" },
+      { object: "Contact", target: "related" },
+      { object: "Task", target: "related" },
+      { object: "User", target: "related" }
+    ];
+    am.on("uploadProgress", ({ fetchedCount }) => {
+      console.log("fetched: ", fetchedCount);
+    });
     const csvs = await am.dumpAsCSVData(queries);
     expect(csvs).toBeDefined();
     expect(csvs.length).toBe(queries.length);
@@ -74,20 +78,20 @@ describe("SerializedUploader", () => {
       expect(typeof csv).toBe("string");
     }
   });
+});
 
-  afterAll(async () => {
-    for (const sobject of [
-      "Task",
-      "Lead",
-      "Case",
-      "Opportunity",
-      "Contact",
-      "Account"
-    ]) {
-      await conn
-        .sobject(sobject)
-        .find({}, "Id")
-        .destroy();
-    }
-  });
+afterAll(async () => {
+  for (const sobject of [
+    "Task",
+    "Lead",
+    "Case",
+    "Opportunity",
+    "Contact",
+    "Account"
+  ]) {
+    await conn
+      .sobject(sobject)
+      .find({}, "Id")
+      .destroy();
+  }
 });
