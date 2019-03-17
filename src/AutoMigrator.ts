@@ -321,42 +321,51 @@ export class AutoMigrator extends EventEmitter {
    */
   async dumpAsCSVData(queries: DumpQuery[]) {
     const conn = this._conn;
-    const queryObjects = queries.map(query => query.object);
-    console.log("describing sobjects", queryObjects);
-    const descriptions = await describeSObjects(conn, queryObjects);
-    console.log("querying primary records");
-    const { fetchedRecordsMap, fetchedIdsMap } = await queryPrimaryRecords(
+    return dumpAsCSVData(conn, queries, params => {
+      this.emit("dumpProgress", params);
+    });
+  }
+}
+
+export async function dumpAsCSVData(
+  conn: Connection,
+  queries: DumpQuery[],
+  reportProgress: (params: any) => void
+) {
+  const queryObjects = queries.map(query => query.object);
+  const descriptions = await describeSObjects(conn, queryObjects);
+  const { fetchedRecordsMap, fetchedIdsMap } = await queryPrimaryRecords(
+    conn,
+    queries,
+    descriptions
+  );
+  let prevCount = 0;
+  let [fetchedCount, fetchedCountPerObject] = calcFetchedCount(fetchedIdsMap);
+  reportProgress({ fetchedCount, fetchedCountPerObject });
+  let newlyFetchedIdsMap = fetchedIdsMap;
+  while (prevCount < fetchedCount) {
+    prevCount = fetchedCount;
+    await fetchAllRelatedRecords(
       conn,
       queries,
+      fetchedRecordsMap,
+      fetchedIdsMap,
+      newlyFetchedIdsMap,
       descriptions
     );
-    let prevCount = 0;
-    let fetchedCount = calcFetchedCount(fetchedIdsMap);
-    let newlyFetchedIdsMap = fetchedIdsMap;
-    while (prevCount < fetchedCount) {
-      prevCount = fetchedCount;
-      console.log("fetch related records");
-      await fetchAllRelatedRecords(
-        conn,
-        queries,
-        fetchedRecordsMap,
-        fetchedIdsMap,
-        newlyFetchedIdsMap,
-        descriptions
-      );
-      console.log("fetch dependent records");
-      newlyFetchedIdsMap = await fetchAllDependentRecords(
-        conn,
-        queries,
-        fetchedRecordsMap,
-        fetchedIdsMap,
-        descriptions
-      );
-      fetchedCount = calcFetchedCount(fetchedIdsMap);
-      this.emit("dumpProgress", { fetchedCount });
-    }
-    return dumpRecordsAsCSV(queries, fetchedRecordsMap, descriptions);
+    [fetchedCount, fetchedCountPerObject] = calcFetchedCount(fetchedIdsMap);
+    reportProgress({ fetchedCount, fetchedCountPerObject });
+    newlyFetchedIdsMap = await fetchAllDependentRecords(
+      conn,
+      queries,
+      fetchedRecordsMap,
+      fetchedIdsMap,
+      descriptions
+    );
+    [fetchedCount, fetchedCountPerObject] = calcFetchedCount(fetchedIdsMap);
+    reportProgress({ fetchedCount, fetchedCountPerObject });
   }
+  return dumpRecordsAsCSV(queries, fetchedRecordsMap, descriptions);
 }
 
 /**
@@ -395,7 +404,6 @@ function getTargetFields(
 }
 
 async function executeQuery(conn: Connection, soql: string) {
-  console.log("execute query =>", soql);
   const records = await new Promise<SFRecord[]>((resolve, reject) => {
     const records: SFRecord[] = [];
     conn
@@ -405,7 +413,6 @@ async function executeQuery(conn: Connection, soql: string) {
       .on("end", () => resolve(records))
       .on("error", err => reject(err));
   });
-  console.log("execute query: done");
   return records;
 }
 
@@ -621,8 +628,18 @@ async function fetchAllRelatedRecords(
 
 function calcFetchedCount(fetchedIdsMap: FetchedIdsMap) {
   return Object.keys(fetchedIdsMap)
-    .map(object => fetchedIdsMap[object].size)
-    .reduce((cnt1, cnt2) => cnt1 + cnt2);
+    .map(object => [object, fetchedIdsMap[object].size] as [string, number])
+    .reduce(
+      ([fetchedCount, fetchedCountPerObject], [object, count]) =>
+        [
+          fetchedCount + count,
+          {
+            ...fetchedCountPerObject,
+            [object]: count
+          }
+        ] as [number, Record<string, number>],
+      [0, {}] as [number, Record<string, number>]
+    );
 }
 
 async function dumpRecordsAsCSV(

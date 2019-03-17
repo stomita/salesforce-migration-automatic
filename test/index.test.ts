@@ -68,8 +68,8 @@ describe("SerializedUploader", () => {
       { object: "Task", target: "related" },
       { object: "User", target: "related" }
     ];
-    am.on("uploadProgress", ({ fetchedCount }) => {
-      console.log("fetched: ", fetchedCount);
+    am.on("dumpProgress", ({ fetchedCount, fetchedCountPerObject }) => {
+      console.log("fetched: ", fetchedCount, fetchedCountPerObject);
     });
     const csvs = await am.dumpAsCSVData(queries);
     expect(csvs).toBeDefined();
