@@ -150,8 +150,8 @@ async function uploadRecords(
   uploadings: Record<string, RecordIdPair[]>,
   idMap: Record<string, string>
 ) {
-  const successes: [string, string][] = [];
-  const failures: [string, Error[]][] = [];
+  const successes: UploadStatus["successes"] = [];
+  const failures: UploadStatus["failures"] = [];
   for (const [table, recordIdPairs] of Object.entries(uploadings)) {
     const records = recordIdPairs.map(({ record }) => record);
     const rets = await conn
@@ -163,9 +163,9 @@ async function uploadRecords(
         if (ret.success) {
           // register map info of oldid -> newid
           idMap[origId] = ret.id;
-          successes.push([origId, ret.id]);
+          successes.push({ origId, newId: ret.id });
         } else {
-          failures.push([origId, ret.errors]);
+          failures.push({ origId, errors: ret.errors });
         }
       });
     }

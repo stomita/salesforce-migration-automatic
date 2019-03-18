@@ -9,8 +9,16 @@ export type UploadInput = {
 
 export type UploadStatus = {
   totalCount: number;
-  successes: [string, string][];
-  failures: [string, Error[]][];
+  successes: Array<{
+    origId: string;
+    newId: string;
+  }>;
+  failures: Array<{
+    origId: string;
+    errors: Array<{
+      message: string;
+    }>;
+  }>;
 };
 
 export type UploadResult = UploadStatus;
