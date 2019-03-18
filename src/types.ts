@@ -1,16 +1,10 @@
-type SObjectFieldDescription = {
-  name: string;
-  type: string;
-  label: string;
-  createable: boolean;
-  referenceTo?: string[] | null | undefined;
-};
+import { DescribeSObjectResult } from "jsforce";
 
-type SObjectDescription = {
-  name: string;
-  label: string;
-  fields: SObjectFieldDescription[];
-};
+export type ArrayValue<T> = T extends Array<infer V> ? V : never;
+
+export type DescribeFieldResult = ArrayValue<DescribeSObjectResult["fields"]>;
+
+export type DescribeSObjectResultMap = Record<string, DescribeSObjectResult>;
 
 export type LoadData = {
   headers: string[];
@@ -41,7 +35,7 @@ export type QueryTarget = {
   scope?: string;
 };
 
-type DumpTarget = QueryTarget | RelatedTarget;
+export type DumpTarget = QueryTarget | RelatedTarget;
 
 export type DumpQuery = {
   object: string;

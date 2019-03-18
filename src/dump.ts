@@ -1,75 +1,18 @@
-import { Connection, DescribeSObjectResult, Record as SFRecord } from "jsforce";
+import { Connection, Record as SFRecord } from "jsforce";
 import stringify from "csv-stringify";
-import { DumpQuery, QueryTarget, RelatedTarget } from "./types";
+import {
+  DescribeSObjectResultMap,
+  DumpQuery,
+  QueryTarget,
+  RelatedTarget
+} from "./types";
+import { describeSObjects } from "./describe";
 
 /**
  *
  */
-export async function dumpAsCSVData(
-  conn: Connection,
-  queries: DumpQuery[],
-  reportProgress: (params: any) => void
-) {
-  const queryObjects = queries.map(query => query.object);
-  const descriptions = await describeSObjects(conn, queryObjects);
-  const { fetchedRecordsMap, fetchedIdsMap } = await queryPrimaryRecords(
-    conn,
-    queries,
-    descriptions
-  );
-  let prevCount = 0;
-  let [fetchedCount, fetchedCountPerObject] = calcFetchedCount(fetchedIdsMap);
-  reportProgress({ fetchedCount, fetchedCountPerObject });
-  let newlyFetchedIdsMap = fetchedIdsMap;
-  while (prevCount < fetchedCount) {
-    prevCount = fetchedCount;
-    await fetchAllRelatedRecords(
-      conn,
-      queries,
-      fetchedRecordsMap,
-      fetchedIdsMap,
-      newlyFetchedIdsMap,
-      descriptions
-    );
-    [fetchedCount, fetchedCountPerObject] = calcFetchedCount(fetchedIdsMap);
-    reportProgress({ fetchedCount, fetchedCountPerObject });
-    newlyFetchedIdsMap = await fetchAllDependentRecords(
-      conn,
-      queries,
-      fetchedRecordsMap,
-      fetchedIdsMap,
-      descriptions
-    );
-    [fetchedCount, fetchedCountPerObject] = calcFetchedCount(fetchedIdsMap);
-    reportProgress({ fetchedCount, fetchedCountPerObject });
-  }
-  return dumpRecordsAsCSV(queries, fetchedRecordsMap, descriptions);
-}
-
-/**
- *
- */
-type DescribeSObjectResultMap = Record<string, DescribeSObjectResult>;
 type FetchedRecordsMap = Record<string, SFRecord[]>;
 type FetchedIdsMap = Record<string, Set<string>>;
-
-/**
- *
- * @param conn
- * @param objects
- */
-async function describeSObjects(conn: Connection, objects: string[]) {
-  const descriptions = await Promise.all(
-    objects.map(object => conn.describe(object))
-  );
-  return descriptions.reduce(
-    (describedMap, described) => ({
-      ...describedMap,
-      [described.name]: described
-    }),
-    {} as DescribeSObjectResultMap
-  );
-}
 
 function getTargetFields(
   query: DumpQuery,
@@ -340,4 +283,48 @@ async function dumpRecordsAsCSV(
       });
     })
   );
+}
+
+/**
+ *
+ */
+export async function dumpAsCSVData(
+  conn: Connection,
+  queries: DumpQuery[],
+  reportProgress: (params: any) => void
+) {
+  const queryObjects = queries.map(query => query.object);
+  const descriptions = await describeSObjects(conn, queryObjects);
+  const { fetchedRecordsMap, fetchedIdsMap } = await queryPrimaryRecords(
+    conn,
+    queries,
+    descriptions
+  );
+  let prevCount = 0;
+  let [fetchedCount, fetchedCountPerObject] = calcFetchedCount(fetchedIdsMap);
+  reportProgress({ fetchedCount, fetchedCountPerObject });
+  let newlyFetchedIdsMap = fetchedIdsMap;
+  while (prevCount < fetchedCount) {
+    prevCount = fetchedCount;
+    await fetchAllRelatedRecords(
+      conn,
+      queries,
+      fetchedRecordsMap,
+      fetchedIdsMap,
+      newlyFetchedIdsMap,
+      descriptions
+    );
+    [fetchedCount, fetchedCountPerObject] = calcFetchedCount(fetchedIdsMap);
+    reportProgress({ fetchedCount, fetchedCountPerObject });
+    newlyFetchedIdsMap = await fetchAllDependentRecords(
+      conn,
+      queries,
+      fetchedRecordsMap,
+      fetchedIdsMap,
+      descriptions
+    );
+    [fetchedCount, fetchedCountPerObject] = calcFetchedCount(fetchedIdsMap);
+    reportProgress({ fetchedCount, fetchedCountPerObject });
+  }
+  return dumpRecordsAsCSV(queries, fetchedRecordsMap, descriptions);
 }
