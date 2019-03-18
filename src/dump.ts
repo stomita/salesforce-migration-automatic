@@ -241,6 +241,7 @@ async function fetchAllRelatedRecords(
         newlyFetchedIds.add(id);
       }
     }
+    fetchedRecordsMap[query.object] = fetchedRecords;
     fetchedIdsMap[query.object] = fetchedIds;
     newlyFetchedIdsMap[query.object] = newlyFetchedIds;
   }
@@ -271,7 +272,7 @@ async function dumpRecordsAsCSV(
   return Promise.all(
     queries.map(async query => {
       const fields = getTargetFields(query, descriptions);
-      const records = fetchedRecordsMap[query.object];
+      const records = fetchedRecordsMap[query.object] || [];
       return new Promise<string>((resolve, reject) => {
         stringify(records, { columns: fields, header: true }, (err, ret) => {
           if (err) {

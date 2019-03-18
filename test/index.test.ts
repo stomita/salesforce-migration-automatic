@@ -78,6 +78,7 @@ describe("SerializedUploader", () => {
     expect(csvs.length).toBe(queries.length);
     for (const csv of csvs) {
       expect(typeof csv).toBe("string");
+      expect(csv.trim().split(/\n/).length).toBeGreaterThan(1);
     }
   });
 });
