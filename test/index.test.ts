@@ -20,7 +20,7 @@ describe("SerializedUploader", () => {
 
   it("should upload empty data", async () => {
     const am = new AutoMigrator(conn);
-    const { successes, failures } = await am.upload();
+    const { successes, failures } = await am.loadCSVData([]);
     expect(successes).toBeDefined();
     expect(successes.length).toBe(0);
     expect(failures).toBeDefined();
@@ -33,12 +33,14 @@ describe("SerializedUploader", () => {
     const am = new AutoMigrator(conn);
     const dataDir = path.join(__dirname, "fixtures", "csv");
     const filenames = await fs.readdir(dataDir);
-    for (const filename of filenames) {
-      const sobject = filename.split(".")[0];
-      const data = await fs.readFile(path.join(dataDir, filename), "utf8");
-      await am.loadCSVData(sobject, data);
-    }
-    am.on("uploadProgress", ({ totalCount, successCount, failureCount }) => {
+    const inputs = await Promise.all(
+      filenames.map(async filename => {
+        const object = filename.split(".")[0];
+        const csvData = await fs.readFile(path.join(dataDir, filename), "utf8");
+        return { object, csvData };
+      })
+    );
+    am.on("loadProgress", ({ totalCount, successCount, failureCount }) => {
       console.log(
         "total: ",
         totalCount,
@@ -48,7 +50,7 @@ describe("SerializedUploader", () => {
         failureCount
       );
     });
-    const { successes, failures } = await am.upload();
+    const { successes, failures } = await am.loadCSVData(inputs);
     expect(successes).toBeDefined();
     expect(successes.length).toBeGreaterThan(0);
     expect(failures).toBeDefined();
@@ -81,17 +83,13 @@ describe("SerializedUploader", () => {
 });
 
 afterAll(async () => {
-  for (const sobject of [
-    "Task",
-    "Lead",
-    "Case",
-    "Opportunity",
-    "Contact",
-    "Account"
-  ]) {
-    await conn
-      .sobject(sobject)
-      .find({}, "Id")
-      .destroy();
-  }
+  await Promise.all(
+    ["Task", "Lead", "Case", "Opportunity", "Contact", "Account"].map(
+      async sobject =>
+        await conn
+          .sobject(sobject)
+          .find({}, "Id")
+          .destroy()
+    )
+  );
 });

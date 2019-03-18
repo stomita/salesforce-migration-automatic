@@ -1,25 +1,24 @@
 import { DescribeSObjectResult } from "jsforce";
 
-export type ArrayValue<T> = T extends Array<infer V> ? V : never;
-
-export type DescribeFieldResult = ArrayValue<DescribeSObjectResult["fields"]>;
-
 export type DescribeSObjectResultMap = Record<string, DescribeSObjectResult>;
 
-export type LoadData = {
-  headers: string[];
-  rows: string[][];
+export type UploadInput = {
+  object: string;
+  csvData: string;
 };
 
-export type RecordIdPair = {
-  id: string;
-  record: Record<string, any>;
-};
-
-export type UploadResult = {
+export type UploadStatus = {
   totalCount: number;
-  successes: Array<[string, string]>;
-  failures: Array<[string, any]>;
+  successes: [string, string][];
+  failures: [string, Error[]][];
+};
+
+export type UploadResult = UploadStatus;
+
+export type UploadProgress = {
+  totalCount: number;
+  successCount: number;
+  failureCount: number;
 };
 
 export type RelatedTarget = {
