@@ -24,13 +24,37 @@ function hasTargets(targetIds: Record<string, boolean>) {
   return Object.keys(targetIds).length > 0;
 }
 
+function removeNamespace(identifier: string) {
+  return identifier.replace(/^[a-zA-Z][a-zA-Z0-9]+__/, "");
+}
+
+function findSObjectDescription(
+  object: string,
+  descriptions: DescribeSObjectResultMap
+) {
+  let description = descriptions[object];
+  if (!description) {
+    description = descriptions[removeNamespace(object)];
+  }
+  return description;
+}
+
 function findFieldDescription(
   object: string,
   fieldName: string,
   descriptions: DescribeSObjectResultMap
 ) {
-  const description = descriptions[object];
-  return description.fields.find(field => field.name === fieldName);
+  const description = findSObjectDescription(object, descriptions);
+  if (description) {
+    let field = description.fields.find(({ name }) => name === fieldName);
+    if (!field) {
+      const fieldNameNoNamespace = removeNamespace(fieldName);
+      field = description.fields.find(
+        ({ name }) => name === fieldNameNoNamespace
+      );
+    }
+    return field;
+  }
 }
 
 function filterUploadableRecords(
@@ -49,7 +73,13 @@ function filterUploadableRecords(
       if (type === "id") {
         idIndex = i;
       } else if (type === "reference") {
-        ridIndexes.push(i);
+        const { referenceTo } = field;
+        for (const refObject of referenceTo || []) {
+          if (findSObjectDescription(refObject, descriptions)) {
+            ridIndexes.push(i);
+            break;
+          }
+        }
       }
     }
   });
