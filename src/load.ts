@@ -20,6 +20,10 @@ type LoadDataset = {
   rows: string[][];
 };
 
+function hasTargets(targetIds: Record<string, boolean>) {
+  return Object.keys(targetIds).length > 0;
+}
+
 function findFieldDescription(
   object: string,
   fieldName: string,
@@ -55,11 +59,9 @@ function filterUploadableRecords(
   const uploadables: string[][] = [];
   const waitings: string[][] = [];
 
-  const hasTargets = Object.keys(targetIds).length > 0;
-
   for (const row of rows) {
     const id = row[idIndex];
-    let isUploadable = !hasTargets || targetIds[id];
+    let isUploadable = !hasTargets(targetIds) || targetIds[id];
     for (const idx of ridIndexes) {
       const refId = row[idx];
       if (refId) {
