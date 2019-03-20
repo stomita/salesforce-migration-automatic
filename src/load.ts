@@ -159,6 +159,9 @@ function convertToRecordIdPair(
           record[name] = value;
         }
         break;
+      case "boolean":
+        record[name] = !/^(|0|n|f|false)$/i.test(value);
+        break;
       case "reference":
         if (createable) {
           record[name] = idMap[value];
