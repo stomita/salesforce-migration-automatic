@@ -10,10 +10,12 @@ export type UploadInput = {
 export type UploadStatus = {
   totalCount: number;
   successes: Array<{
+    object: string;
     origId: string;
     newId: string;
   }>;
   failures: Array<{
+    object: string;
     origId: string;
     errors: Array<{
       message: string;
