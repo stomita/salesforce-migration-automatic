@@ -7,6 +7,7 @@
   "author": "Shinichi Tomita <shinichi.tomita@gmail.com>",
   "license": "MIT",
   "scripts": {
+    "prepare": "npm run lint && npm run build",
     "lint": "eslint src --ext ts",
     "build": "tsc",
     "test": "jest"
