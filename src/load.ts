@@ -160,7 +160,9 @@ function convertToRecordIdPair(
         }
         break;
       case "boolean":
-        record[name] = !/^(|0|n|f|false)$/i.test(value);
+        if (createable) {
+          record[name] = !/^(|0|n|f|false)$/i.test(value);
+        }
         break;
       case "reference":
         if (createable) {
