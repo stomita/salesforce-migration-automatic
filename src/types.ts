@@ -1,4 +1,4 @@
-import { DescribeSObjectResult } from "jsforce";
+import { DescribeSObjectResult, Record as SFRecord } from "jsforce";
 
 export type DescribeSObjectResultMap = Record<string, DescribeSObjectResult>;
 
@@ -11,11 +11,13 @@ export type UploadStatus = {
   totalCount: number;
   successes: Array<{
     object: string;
+    record: SFRecord;
     origId: string;
     newId: string;
   }>;
   failures: Array<{
     object: string;
+    record: SFRecord;
     origId: string;
     errors: Array<{
       message: string;

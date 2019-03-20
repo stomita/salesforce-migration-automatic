@@ -196,13 +196,14 @@ async function uploadRecords(
       .create(records, { allowRecursive: true } as any);
     if (Array.isArray(rets)) {
       rets.forEach((ret, i) => {
+        const record = records[i];
         const origId = recordIdPairs[i].id;
         if (ret.success) {
           // register map info of oldid -> newid
           idMap[origId] = ret.id;
-          successes.push({ object, origId, newId: ret.id });
+          successes.push({ object, origId, newId: ret.id, record });
         } else {
-          failures.push({ object, origId, errors: ret.errors });
+          failures.push({ object, origId, errors: ret.errors, record });
         }
       });
     }
