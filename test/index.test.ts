@@ -15,7 +15,7 @@ beforeAll(async () => {
 /**
  *
  */
-describe("SerializedUploader", () => {
+describe("AutoMigrator", () => {
   jest.setTimeout(300000);
 
   it("should upload empty data", async () => {
@@ -30,6 +30,7 @@ describe("SerializedUploader", () => {
   it("should upload data from csv", async () => {
     const accCnt = await conn.sobject("Account").count();
     const oppCnt = await conn.sobject("Opportunity").count();
+    const userCnt = await conn.sobject("User").count();
     const am = new AutoMigrator(conn);
     const dataDir = path.join(__dirname, "fixtures", "csv");
     const filenames = await fs.readdir(dataDir);
@@ -40,6 +41,12 @@ describe("SerializedUploader", () => {
         return { object, csvData };
       })
     );
+    const mappingPolicies = [
+      {
+        object: "User",
+        keyField: "FederationIdentifier"
+      }
+    ];
     am.on("loadProgress", ({ totalCount, successCount, failureCount }) => {
       console.log(
         "total: ",
@@ -50,7 +57,10 @@ describe("SerializedUploader", () => {
         failureCount
       );
     });
-    const { successes, failures } = await am.loadCSVData(inputs);
+    const { successes, failures } = await am.loadCSVData(
+      inputs,
+      mappingPolicies
+    );
     expect(successes).toBeDefined();
     expect(successes.length).toBeGreaterThan(0);
     expect(failures).toBeDefined();
@@ -60,6 +70,8 @@ describe("SerializedUploader", () => {
     expect(newAccCnt).toBeGreaterThan(accCnt);
     const newOppCnt = await conn.sobject("Opportunity").count();
     expect(newOppCnt).toBeGreaterThan(oppCnt);
+    const newUserCnt = await conn.sobject("User").count();
+    expect(newUserCnt).toBe(userCnt);
   });
 
   it("should download data as csv", async () => {
@@ -67,7 +79,8 @@ describe("SerializedUploader", () => {
     const queries: DumpQuery[] = [
       { object: "Account", target: "query" },
       { object: "Contact", target: "related" },
-      { object: "Task", target: "related" },
+      { object: "Opportunity", target: "related" },
+      { object: "Case", target: "related" },
       { object: "User", target: "related" }
     ];
     am.on("dumpProgress", ({ fetchedCount, fetchedCountPerObject }) => {
@@ -84,13 +97,15 @@ describe("SerializedUploader", () => {
 });
 
 afterAll(async () => {
-  await Promise.all(
-    ["Task", "Lead", "Case", "Opportunity", "Contact", "Account"].map(
-      async sobject =>
-        await conn
-          .sobject(sobject)
-          .find({}, "Id")
-          .destroy()
-    )
-  );
+  for (let i = 0; i < 3; i++) {
+    await Promise.all(
+      ["Task", "Lead", "Case", "Opportunity", "Contact", "Account"].map(
+        async sobject =>
+          await conn
+            .sobject(sobject)
+            .find({}, "Id")
+            .destroy()
+      )
+    );
+  }
 });

@@ -7,6 +7,11 @@ export type UploadInput = {
   csvData: string;
 };
 
+export type RecordMappingPolicy = {
+  object: string;
+  keyField: string;
+};
+
 export type UploadStatus = {
   totalCount: number;
   successes: Array<{
