@@ -34,7 +34,7 @@ jobs:
             echo $PATH
             sfdx force:auth:jwt:grant -i ${DEVHUB_CLIENT_ID} -f keys/server.key -u ${DEVHUB_USERNAME} -d -a hub
             sfdx force:org:create -f config/project-scratch-def.json -a circle_build_${CIRCLE_BUILD_NUM} -s --wait 5 
-            sfdx force:user:create -f config/user-def.json -a circle_build_${CIRCLE_BUILD_NUM}_user01 
+            sfdx force:user:create -f config/user-def.json -u circle_build_${CIRCLE_BUILD_NUM}
       - run:
           name: Test
           command: |
