@@ -1,12 +1,7 @@
 import { Connection, Record as SFRecord } from "jsforce";
 import stringify from "csv-stringify";
-import {
-  DescribeSObjectResultMap,
-  DumpQuery,
-  QueryTarget,
-  RelatedTarget
-} from "./types";
-import { describeSObjects } from "./describe";
+import { DumpQuery, QueryTarget, RelatedTarget } from "./types";
+import { describeSObjects, Describer } from "./describe";
 
 /**
  *
@@ -14,14 +9,15 @@ import { describeSObjects } from "./describe";
 type FetchedRecordsMap = Record<string, SFRecord[]>;
 type FetchedIdsMap = Record<string, Set<string>>;
 
-function getTargetFields(
-  query: DumpQuery,
-  descriptions: DescribeSObjectResultMap
-) {
+function getTargetFields(query: DumpQuery, describer: Describer) {
   if (query.target === "query" && query.fields) {
     return query.fields;
   }
-  return descriptions[query.object].fields.map(field => field.name);
+  const description = describer.findSObjectDescription(query.object);
+  if (!description) {
+    throw new Error(`No object description information found: ${query.object}`);
+  }
+  return description.fields.map(field => field.name);
 }
 
 async function executeQuery(conn: Connection, soql: string) {
@@ -40,9 +36,9 @@ async function executeQuery(conn: Connection, soql: string) {
 async function queryRecords(
   conn: Connection,
   query: { object: string } & QueryTarget,
-  descriptions: DescribeSObjectResultMap
+  describer: Describer
 ) {
-  const fields = getTargetFields(query, descriptions);
+  const fields = getTargetFields(query, describer);
   const soql = `SELECT ${fields.join(", ")} FROM ${query.object}`;
   return executeQuery(conn, soql);
 }
@@ -50,7 +46,7 @@ async function queryRecords(
 async function queryPrimaryRecords(
   conn: Connection,
   queries: DumpQuery[],
-  descriptions: DescribeSObjectResultMap
+  describer: Describer
 ) {
   const fetchedRecordsMap: FetchedRecordsMap = {};
   const fetchedIdsMap: FetchedIdsMap = {};
@@ -61,7 +57,7 @@ async function queryPrimaryRecords(
         if (query.target !== "query") {
           throw new Error("cannot be reached here");
         }
-        const records = await queryRecords(conn, query, descriptions);
+        const records = await queryRecords(conn, query, describer);
         const ids = new Set([...records.map(record => record.Id)]);
         fetchedRecordsMap[query.object] = records;
         fetchedIdsMap[query.object] = ids;
@@ -74,11 +70,11 @@ function getFetchingIds(
   object: string,
   fetchedRecordsMap: FetchedRecordsMap,
   fetchedIds: Set<string>,
-  descriptions: DescribeSObjectResultMap
+  describer: Describer
 ) {
   const fetchingIds = new Set<string>();
   for (const objectKey of Object.keys(fetchedRecordsMap)) {
-    const description = descriptions[objectKey];
+    const description = describer.findSObjectDescription(objectKey);
     if (!description) {
       continue;
     }
@@ -107,14 +103,14 @@ async function fetchDependentRecords(
   query: { object: string } & RelatedTarget,
   fetchedRecordsMap: FetchedRecordsMap,
   fetchedIds: Set<string>,
-  descriptions: DescribeSObjectResultMap
+  describer: Describer
 ) {
-  const fields = getTargetFields(query, descriptions);
+  const fields = getTargetFields(query, describer);
   const fetchingIds = getFetchingIds(
     query.object,
     fetchedRecordsMap,
     fetchedIds,
-    descriptions
+    describer
   );
   if (fetchingIds.size === 0) {
     return [];
@@ -130,7 +126,7 @@ async function fetchAllDependentRecords(
   queries: DumpQuery[],
   fetchedRecordsMap: FetchedRecordsMap,
   fetchedIdsMap: FetchedIdsMap,
-  descriptions: DescribeSObjectResultMap
+  describer: Describer
 ) {
   const newlyFetchedIdsMap: FetchedIdsMap = {};
   for (const query of queries) {
@@ -145,7 +141,7 @@ async function fetchAllDependentRecords(
       query,
       fetchedRecordsMap,
       fetchedIds,
-      descriptions
+      describer
     );
     for (const record of records) {
       const id = record.Id;
@@ -163,10 +159,13 @@ async function fetchAllDependentRecords(
 function getParentRelationsMap(
   object: string,
   newlyFetchedIdsMap: FetchedIdsMap,
-  descriptions: DescribeSObjectResultMap
+  describer: Describer
 ) {
   const parentRelationsMap: Record<string, Set<string>> = {};
-  const description = descriptions[object];
+  const description = describer.findSObjectDescription(object);
+  if (!description) {
+    throw new Error(`No object description found: ${object}`);
+  }
   const { fields } = description;
   for (const field of fields) {
     if (field.createable && field.type === "reference") {
@@ -190,13 +189,13 @@ async function fetchRelatedRecords(
   conn: Connection,
   query: { object: string } & RelatedTarget,
   newlyFetchedIdsMap: FetchedIdsMap,
-  descriptions: DescribeSObjectResultMap
+  describer: Describer
 ) {
-  const fields = getTargetFields(query, descriptions);
+  const fields = getTargetFields(query, describer);
   const parentRelationsMap = getParentRelationsMap(
     query.object,
     newlyFetchedIdsMap,
-    descriptions
+    describer
   );
   const conditions = Object.keys(parentRelationsMap).map(refField => {
     const refIds = parentRelationsMap[refField];
@@ -217,7 +216,7 @@ async function fetchAllRelatedRecords(
   fetchedRecordsMap: FetchedRecordsMap,
   fetchedIdsMap: FetchedIdsMap,
   newlyFetchedIdsMap: FetchedIdsMap,
-  descriptions: DescribeSObjectResultMap
+  describer: Describer
 ) {
   for (const query of queries) {
     if (query.target !== "related") {
@@ -231,7 +230,7 @@ async function fetchAllRelatedRecords(
       conn,
       query,
       newlyFetchedIdsMap,
-      descriptions
+      describer
     );
     for (const record of records) {
       const id = record.Id;
@@ -267,11 +266,11 @@ function calcFetchedCount(fetchedIdsMap: FetchedIdsMap) {
 async function dumpRecordsAsCSV(
   queries: DumpQuery[],
   fetchedRecordsMap: FetchedRecordsMap,
-  descriptions: DescribeSObjectResultMap
+  describer: Describer
 ) {
   return Promise.all(
     queries.map(async query => {
-      const fields = getTargetFields(query, descriptions);
+      const fields = getTargetFields(query, describer);
       const records = fetchedRecordsMap[query.object] || [];
       return new Promise<string>((resolve, reject) => {
         stringify(records, { columns: fields, header: true }, (err, ret) => {
@@ -295,11 +294,11 @@ export async function dumpAsCSVData(
   reportProgress: (params: any) => void
 ) {
   const queryObjects = queries.map(query => query.object);
-  const descriptions = await describeSObjects(conn, queryObjects);
+  const describer = await describeSObjects(conn, queryObjects);
   const { fetchedRecordsMap, fetchedIdsMap } = await queryPrimaryRecords(
     conn,
     queries,
-    descriptions
+    describer
   );
   let prevCount = 0;
   let [fetchedCount, fetchedCountPerObject] = calcFetchedCount(fetchedIdsMap);
@@ -313,7 +312,7 @@ export async function dumpAsCSVData(
       fetchedRecordsMap,
       fetchedIdsMap,
       newlyFetchedIdsMap,
-      descriptions
+      describer
     );
     [fetchedCount, fetchedCountPerObject] = calcFetchedCount(fetchedIdsMap);
     reportProgress({ fetchedCount, fetchedCountPerObject });
@@ -322,10 +321,10 @@ export async function dumpAsCSVData(
       queries,
       fetchedRecordsMap,
       fetchedIdsMap,
-      descriptions
+      describer
     );
     [fetchedCount, fetchedCountPerObject] = calcFetchedCount(fetchedIdsMap);
     reportProgress({ fetchedCount, fetchedCountPerObject });
   }
-  return dumpRecordsAsCSV(queries, fetchedRecordsMap, descriptions);
+  return dumpRecordsAsCSV(queries, fetchedRecordsMap, describer);
 }

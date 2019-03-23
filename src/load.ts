@@ -1,15 +1,13 @@
 import { Connection, Record as SFRecord } from "jsforce";
 import parse from "csv-parse";
 import {
-  DescribeSObjectResultMap,
   UploadInput,
   UploadResult,
   UploadStatus,
   UploadProgress,
   RecordMappingPolicy
 } from "./types";
-import { describeSObjects } from "./describe";
-import { removeNamespace } from "./util";
+import { describeSObjects, Describer } from "./describe";
 
 type RecordIdPair = {
   id: string;
@@ -26,50 +24,17 @@ function hasTargets(targetIds: Record<string, boolean>) {
   return Object.keys(targetIds).length > 0;
 }
 
-function findSObjectDescription(
-  object: string,
-  descriptions: DescribeSObjectResultMap
-) {
-  const objectLowerCase = object.toLowerCase();
-  let description = descriptions[objectLowerCase];
-  if (!description) {
-    description = descriptions[removeNamespace(objectLowerCase)];
-  }
-  return description;
-}
-
-function findFieldDescription(
-  object: string,
-  fieldName: string,
-  descriptions: DescribeSObjectResultMap
-) {
-  const description = findSObjectDescription(object, descriptions);
-  if (description) {
-    const fieldNameLowerCase = fieldName.toLowerCase();
-    let field = description.fields.find(
-      ({ name }) => name.toLowerCase() === fieldNameLowerCase
-    );
-    if (!field) {
-      const fieldNameNoNamespace = removeNamespace(fieldNameLowerCase);
-      field = description.fields.find(
-        ({ name }) => name.toLowerCase() === fieldNameNoNamespace
-      );
-    }
-    return field;
-  }
-}
-
 function filterUploadableRecords(
   { object, headers, rows }: LoadDataset,
   targetIds: Record<string, boolean>,
   idMap: Record<string, string>,
-  descriptions: DescribeSObjectResultMap
+  describer: Describer
 ) {
   // search id and reference id column index
   let idIndex: number | undefined = undefined;
   let ridIndexes: number[] = [];
   headers.forEach((header, i) => {
-    const field = findFieldDescription(object, header, descriptions);
+    const field = describer.findFieldDescription(object, header);
     if (field) {
       const { type } = field;
       if (type === "id") {
@@ -77,7 +42,7 @@ function filterUploadableRecords(
       } else if (type === "reference") {
         const { referenceTo } = field;
         for (const refObject of referenceTo || []) {
-          if (findSObjectDescription(refObject, descriptions)) {
+          if (describer.findSObjectDescription(refObject)) {
             ridIndexes.push(i);
             break;
           }
@@ -129,12 +94,12 @@ function convertToRecordIdPair(
   { object, headers }: LoadDataset,
   row: string[],
   idMap: Record<string, string>,
-  descriptions: DescribeSObjectResultMap
+  describer: Describer
 ) {
   let id: string | undefined;
   const record: Record<string, any> = {};
   row.forEach((value, i) => {
-    const field = findFieldDescription(object, headers[i], descriptions);
+    const field = describer.findFieldDescription(object, headers[i]);
     if (field == null) {
       return;
     }
@@ -194,12 +159,15 @@ async function uploadRecords(
   conn: Connection,
   uploadings: Record<string, RecordIdPair[]>,
   idMap: Record<string, string>,
-  descriptions: DescribeSObjectResultMap
+  describer: Describer
 ) {
   const successes: UploadStatus["successes"] = [];
   const failures: UploadStatus["failures"] = [];
   for (const [object, recordIdPairs] of Object.entries(uploadings)) {
-    const description = findSObjectDescription(object, descriptions);
+    const description = describer.findSObjectDescription(object);
+    if (!description) {
+      throw new Error(`No object description found: ${object}`);
+    }
     const records = recordIdPairs.map(({ record }) => record);
     const rets = await conn
       .sobject(description.name)
@@ -236,7 +204,7 @@ async function uploadDatasets(
   datasets: LoadDataset[],
   targetIds: Record<string, boolean>,
   idMap: Record<string, string>,
-  descriptions: DescribeSObjectResultMap,
+  describer: Describer,
   uploadStatus: UploadStatus,
   reportProgress: (progress: UploadProgress) => void
 ): Promise<UploadResult> {
@@ -247,10 +215,10 @@ async function uploadDatasets(
       dataset,
       targetIds,
       idMap,
-      descriptions
+      describer
     );
     const uploadRecordIdPairs = uploadables.map(row =>
-      convertToRecordIdPair(dataset, row, idMap, descriptions)
+      convertToRecordIdPair(dataset, row, idMap, describer)
     );
     if (uploadRecordIdPairs.length > 0) {
       uploadings[dataset.object] = uploadRecordIdPairs;
@@ -262,7 +230,7 @@ async function uploadDatasets(
       conn,
       uploadings,
       idMap,
-      descriptions
+      describer
     );
     const totalCount = uploadStatus.totalCount;
     // event notification;
@@ -280,7 +248,7 @@ async function uploadDatasets(
       datasets,
       targetIds,
       idMap,
-      descriptions,
+      describer,
       newUploadStatus,
       reportProgress
     );
@@ -296,7 +264,7 @@ async function getExistingIdMap(
   conn: Connection,
   dataset: LoadDataset,
   keyField: string,
-  descriptions: DescribeSObjectResultMap
+  describer: Describer
 ) {
   const { object, headers, rows } = dataset;
   let idIndex = -1;
@@ -306,7 +274,7 @@ async function getExistingIdMap(
       keyIndex = i;
       return;
     }
-    const field = findFieldDescription(object, header, descriptions);
+    const field = describer.findFieldDescription(object, header);
     if (field && field.type === "id") {
       idIndex = i;
     }
@@ -371,7 +339,7 @@ async function getAllExistingIdMap(
   conn: Connection,
   datasets: LoadDataset[],
   mappingPolicies: RecordMappingPolicy[],
-  descriptions: DescribeSObjectResultMap
+  describer: Describer
 ) {
   const datasetMap = datasets.reduce(
     (datasetMap, dataset) => ({
@@ -386,7 +354,7 @@ async function getAllExistingIdMap(
       if (!dataset) {
         throw new Error(`Input is not found for mapping object: ${object}`);
       }
-      return getExistingIdMap(conn, dataset, keyField, descriptions);
+      return getExistingIdMap(conn, dataset, keyField, describer);
     })
   )).reduce(
     (idMap, ids) => ({
