@@ -22,7 +22,7 @@ export async function describeSObjects(conn: Connection, objects: string[]) {
   return descriptions.reduce(
     (describedMap, described) => ({
       ...describedMap,
-      [described.name]: described
+      [described.name.toLowerCase()]: described
     }),
     {} as DescribeSObjectResultMap
   );

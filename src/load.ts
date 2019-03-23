@@ -30,9 +30,10 @@ function findSObjectDescription(
   object: string,
   descriptions: DescribeSObjectResultMap
 ) {
-  let description = descriptions[object];
+  const objectLowerCase = object.toLowerCase();
+  let description = descriptions[objectLowerCase];
   if (!description) {
-    description = descriptions[removeNamespace(object)];
+    description = descriptions[removeNamespace(objectLowerCase)];
   }
   return description;
 }
@@ -44,11 +45,14 @@ function findFieldDescription(
 ) {
   const description = findSObjectDescription(object, descriptions);
   if (description) {
-    let field = description.fields.find(({ name }) => name === fieldName);
+    const fieldNameLowerCase = fieldName.toLowerCase();
+    let field = description.fields.find(
+      ({ name }) => name.toLowerCase() === fieldNameLowerCase
+    );
     if (!field) {
-      const fieldNameNoNamespace = removeNamespace(fieldName);
+      const fieldNameNoNamespace = removeNamespace(fieldNameLowerCase);
       field = description.fields.find(
-        ({ name }) => name === fieldNameNoNamespace
+        ({ name }) => name.toLowerCase() === fieldNameNoNamespace
       );
     }
     return field;
