@@ -9,6 +9,7 @@ import {
   RecordMappingPolicy
 } from "./types";
 import { describeSObjects } from "./describe";
+import { removeNamespace } from "./util";
 
 type RecordIdPair = {
   id: string;
@@ -23,10 +24,6 @@ type LoadDataset = {
 
 function hasTargets(targetIds: Record<string, boolean>) {
   return Object.keys(targetIds).length > 0;
-}
-
-function removeNamespace(identifier: string) {
-  return identifier.replace(/^[a-zA-Z][a-zA-Z0-9]+__/, "");
 }
 
 function findSObjectDescription(

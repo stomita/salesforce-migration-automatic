@@ -1,5 +1,6 @@
 import { Connection } from "jsforce";
 import { DescribeSObjectResultMap } from "./types";
+import { removeNamespace } from "./util";
 
 /**
  *
@@ -8,7 +9,15 @@ import { DescribeSObjectResultMap } from "./types";
  */
 export async function describeSObjects(conn: Connection, objects: string[]) {
   const descriptions = await Promise.all(
-    objects.map(object => conn.describe(object))
+    objects.map(async object =>
+      conn.describe(object).catch(err => {
+        const object2 = removeNamespace(object);
+        if (object !== object2) {
+          return conn.describe(removeNamespace(object));
+        }
+        throw err;
+      })
+    )
   );
   return descriptions.reduce(
     (describedMap, described) => ({
