@@ -189,14 +189,16 @@ function convertToRecordIdPair(
 async function uploadRecords(
   conn: Connection,
   uploadings: Record<string, RecordIdPair[]>,
-  idMap: Record<string, string>
+  idMap: Record<string, string>,
+  descriptions: DescribeSObjectResultMap
 ) {
   const successes: UploadStatus["successes"] = [];
   const failures: UploadStatus["failures"] = [];
   for (const [object, recordIdPairs] of Object.entries(uploadings)) {
+    const description = findSObjectDescription(object, descriptions);
     const records = recordIdPairs.map(({ record }) => record);
     const rets = await conn
-      .sobject(object)
+      .sobject(description.name)
       .create(records, { allowRecursive: true } as any);
     if (Array.isArray(rets)) {
       rets.forEach((ret, i) => {
@@ -255,7 +257,8 @@ async function uploadDatasets(
     const { successes, failures } = await uploadRecords(
       conn,
       uploadings,
-      idMap
+      idMap,
+      descriptions
     );
     const totalCount = uploadStatus.totalCount;
     // event notification;
