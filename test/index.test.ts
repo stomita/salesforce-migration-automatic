@@ -77,7 +77,14 @@ describe("AutoMigrator", () => {
   it("should download data as csv", async () => {
     const am = new AutoMigrator(conn);
     const queries: DumpQuery[] = [
-      { object: "Account", target: "query" },
+      {
+        object: "Account",
+        target: "query",
+        condition: "CreatedDate = TODAY",
+        orderby: "Name ASC",
+        scope: "Everything",
+        limit: 1000
+      },
       { object: "Contact", target: "related" },
       { object: "Opportunity", target: "related" },
       { object: "Case", target: "related" },

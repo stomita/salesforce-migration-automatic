@@ -39,7 +39,12 @@ async function queryRecords(
   describer: Describer
 ) {
   const fields = getTargetFields(query, describer);
-  const soql = `SELECT ${fields.join(", ")} FROM ${query.object}`;
+  let soql = `SELECT ${fields.join(", ")} FROM ${query.object}`;
+  soql += query.scope ? ` USING SCOPE ${query.scope}` : "";
+  soql += query.condition ? ` WHERE ${query.condition}` : "";
+  soql += query.orderby ? ` ORDER BY ${query.orderby}` : "";
+  soql += query.condition ? ` LIMIT ${query.limit}` : "";
+  soql += query.offset ? ` OFFSET ${query.offset}` : "";
   return executeQuery(conn, soql);
 }
 
