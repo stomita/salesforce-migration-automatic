@@ -2,10 +2,10 @@
   "orgName": "TestOrg",
   "country": "US",
   "edition": "Developer",
-  "hasSampleData": "false",
+  "hasSampleData": false,
   "settings": {
-    "orgPreferenceSettings": {
-      "s1DesktopEnabled": true
+    "lightningExperienceSettings": {
+        "enableS1DesktopEnabled": true
     }
   }
 }
