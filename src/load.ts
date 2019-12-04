@@ -32,7 +32,7 @@ function filterUploadableRecords(
 ) {
   // search id and reference id column index
   let idIndex: number | undefined = undefined;
-  let ridIndexes: number[] = [];
+  let refFields: Array<{ field: string; index: number }> = [];
   headers.forEach((header, i) => {
     const field = describer.findFieldDescription(object, header);
     if (field) {
@@ -40,10 +40,10 @@ function filterUploadableRecords(
       if (type === "id") {
         idIndex = i;
       } else if (type === "reference") {
-        const { referenceTo } = field;
+        const { name: fieldName, referenceTo } = field;
         for (const refObject of referenceTo || []) {
           if (describer.findSObjectDescription(refObject)) {
-            ridIndexes.push(i);
+            refFields.push({ field: fieldName, index: i });
             break;
           }
         }
@@ -54,7 +54,12 @@ function filterUploadableRecords(
     throw new Error(`No id type field is listed for: ${object}`);
   }
   const uploadables: string[][] = [];
-  const waitings: string[][] = [];
+  const waitings: Array<{
+    row: string[];
+    id: string;
+    blockingField: string | undefined;
+    blockingId: string | undefined;
+  }> = [];
   const notloadables: string[][] = [];
 
   for (const row of rows) {
@@ -65,8 +70,11 @@ function filterUploadableRecords(
       continue;
     }
     let isUploadable = !hasTargets(targetIds) || targetIds[id];
-    for (const idx of ridIndexes) {
-      const refId = row[idx];
+    let blockingField: string | undefined = undefined;
+    let blockingId: string | undefined = undefined;
+    for (const refField of refFields) {
+      const { index: refIdx, field } = refField;
+      const refId = row[refIdx];
       if (refId) {
         if (targetIds[refId]) {
           // if parent record is in targets
@@ -78,13 +86,15 @@ function filterUploadableRecords(
         if (!idMap[refId]) {
           // if parent record not uploaded
           isUploadable = false;
+          blockingField = field;
+          blockingId = refId;
         }
       }
     }
     if (isUploadable) {
       uploadables.push(row);
     } else {
-      waitings.push(row);
+      waitings.push({ row, id, blockingField, blockingId });
     }
   }
   return { uploadables, waitings, notloadables };
@@ -210,6 +220,7 @@ async function uploadDatasets(
 ): Promise<UploadResult> {
   // array of sobj and recordId (old) pair
   const uploadings: Record<string, RecordIdPair[]> = {};
+  const blocked: UploadStatus["blocked"] = [];
   for (const dataset of datasets) {
     const { uploadables, waitings } = filterUploadableRecords(
       dataset,
@@ -223,7 +234,15 @@ async function uploadDatasets(
     if (uploadRecordIdPairs.length > 0) {
       uploadings[dataset.object] = uploadRecordIdPairs;
     }
-    dataset.rows = waitings;
+    dataset.rows = waitings.map(({ row }) => row);
+    blocked.push(
+      ...waitings.map(({ id, blockingField, blockingId }) => ({
+        object: dataset.object,
+        origId: id,
+        blockingField,
+        blockingId
+      }))
+    );
   }
   if (Object.keys(uploadings).length > 0) {
     const { successes, failures } = await uploadRecords(
@@ -237,7 +256,8 @@ async function uploadDatasets(
     const newUploadStatus = {
       totalCount,
       successes: [...uploadStatus.successes, ...successes],
-      failures: [...uploadStatus.failures, ...failures]
+      failures: [...uploadStatus.failures, ...failures],
+      blocked
     };
     const successCount = newUploadStatus.successes.length;
     const failureCount = newUploadStatus.failures.length;
@@ -386,7 +406,12 @@ async function upload(
     mappingPolicies,
     descriptions
   );
-  const uploadStatus = { totalCount, successes: [], failures: [] };
+  const uploadStatus = {
+    totalCount,
+    successes: [],
+    failures: [],
+    blocked: []
+  };
   return uploadDatasets(
     conn,
     datasets,

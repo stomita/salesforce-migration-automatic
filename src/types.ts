@@ -28,6 +28,12 @@ export type UploadStatus = {
       message: string;
     }>;
   }>;
+  blocked: Array<{
+    object: string;
+    origId: string;
+    blockingField: string | undefined;
+    blockingId: string | undefined;
+  }>;
 };
 
 export type UploadResult = UploadStatus;

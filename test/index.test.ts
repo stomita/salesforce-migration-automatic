@@ -57,7 +57,7 @@ describe("AutoMigrator", () => {
         failureCount
       );
     });
-    const { successes, failures } = await am.loadCSVData(
+    const { successes, failures, blocked } = await am.loadCSVData(
       inputs,
       mappingPolicies
     );
@@ -66,6 +66,8 @@ describe("AutoMigrator", () => {
     expect(failures).toBeDefined();
     failures.forEach(failure => console.log(failure));
     expect(failures.length).toBe(0);
+    expect(blocked).toBeDefined();
+    expect(blocked.length).toBe(0);
     const newAccCnt = await conn.sobject("Account").count();
     expect(newAccCnt).toBeGreaterThan(accCnt);
     const newOppCnt = await conn.sobject("Opportunity").count();
