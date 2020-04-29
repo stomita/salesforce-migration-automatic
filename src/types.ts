@@ -1,4 +1,4 @@
-import { DescribeSObjectResult, Record as SFRecord } from "jsforce";
+import { DescribeSObjectResult, Record as SFRecord } from 'jsforce';
 
 export type DescribeSObjectResultMap = Record<string, DescribeSObjectResult>;
 
@@ -45,11 +45,11 @@ export type UploadProgress = {
 };
 
 export type RelatedTarget = {
-  target: "related";
+  target: 'related';
 };
 
 export type QueryTarget = {
-  target: "query";
+  target: 'query';
   condition?: string;
   orderby?: string;
   limit?: number;

@@ -1,5 +1,5 @@
 /**
  *
  */
-export * from "./types";
-export * from "./AutoMigrator";
+export * from './types';
+export * from './AutoMigrator';

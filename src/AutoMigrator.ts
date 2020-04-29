@@ -1,8 +1,8 @@
-import { EventEmitter } from "events";
-import { Connection } from "jsforce";
-import { UploadInput, RecordMappingPolicy, DumpQuery } from "./types";
-import { loadCSVData } from "./load";
-import { dumpAsCSVData } from "./dump";
+import { EventEmitter } from 'events';
+import { Connection } from 'jsforce';
+import { UploadInput, RecordMappingPolicy, DumpQuery } from './types';
+import { loadCSVData } from './load';
+import { dumpAsCSVData } from './dump';
 
 /*
  * Import other org data, exported from salesforce.com (via DataLoader) This
@@ -23,17 +23,17 @@ export class AutoMigrator extends EventEmitter {
   async loadCSVData(
     inputs: UploadInput[],
     mappingPolicies: RecordMappingPolicy[] = [],
-    options: Object = {}
+    options: Object = {},
   ) {
     const conn = this._conn;
     return loadCSVData(
       conn,
       inputs,
       mappingPolicies,
-      params => {
-        this.emit("loadProgress", params);
+      (params) => {
+        this.emit('loadProgress', params);
       },
-      options
+      options,
     );
   }
 
@@ -43,8 +43,8 @@ export class AutoMigrator extends EventEmitter {
    */
   async dumpAsCSVData(queries: DumpQuery[]) {
     const conn = this._conn;
-    return dumpAsCSVData(conn, queries, params => {
-      this.emit("dumpProgress", params);
+    return dumpAsCSVData(conn, queries, (params) => {
+      this.emit('dumpProgress', params);
     });
   }
 }
