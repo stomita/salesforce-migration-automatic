@@ -1,6 +1,17 @@
 /**
  *
  */
-export function removeNamespace(identifier: string) {
-  return identifier.replace(/^[a-zA-Z][a-zA-Z0-9]+__/, '');
+export function removeNamespace(identifier: string, namespace: string) {
+  return identifier.indexOf(`${namespace}__`) === 0
+    ? identifier.substring(namespace.length + 2)
+    : identifier;
+}
+
+/**
+ *
+ */
+export function addNamespace(identifier: string, namespace: string) {
+  return identifier.split('__').length > 2
+    ? identifier
+    : `${namespace}__${identifier}`;
 }

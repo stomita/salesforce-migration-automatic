@@ -1,43 +1,71 @@
 import { Connection, DescribeSObjectResult, Field } from 'jsforce';
-import { DescribeSObjectResultMap } from './types';
-import { removeNamespace } from './util';
+import { removeNamespace, addNamespace } from './util';
+
+/**
+ *
+ */
+type DescribeOptions = {
+  defaultNamespace?: string;
+};
+
+/**
+ *
+ */
+function getTargetByIdentifierInNamespace<T>(
+  map: Map<string, T>,
+  identifier: string,
+  namespace?: string,
+) {
+  let target = map.get(identifier);
+  if (!target && namespace) {
+    const identifierNoNamespace = removeNamespace(identifier, namespace);
+    if (identifierNoNamespace !== identifier) {
+      target = map.get(identifierNoNamespace);
+    }
+    if (!target) {
+      const identifierWithNamespace = addNamespace(identifier, namespace);
+      if (identifierWithNamespace !== identifier) {
+        target = map.get(identifierWithNamespace);
+      }
+    }
+  }
+  return target;
+}
 
 /**
  *
  */
 function findSObjectDescription(
-  object: string,
-  descriptions: DescribeSObjectResultMap,
+  objectName: string,
+  descriptions: Map<string, DescribeSObjectResult>,
+  options: DescribeOptions,
 ) {
-  const objectLowerCase = object.toLowerCase();
-  let description = descriptions[objectLowerCase];
-  if (!description) {
-    description = descriptions[removeNamespace(objectLowerCase)];
-  }
-  return description;
+  return getTargetByIdentifierInNamespace(
+    descriptions,
+    objectName.toLowerCase(),
+    options.defaultNamespace,
+  );
 }
 
 /**
  *
  */
 function findFieldDescription(
-  object: string,
+  objectName: string,
   fieldName: string,
-  descriptions: DescribeSObjectResultMap,
+  descriptions: Map<string, DescribeSObjectResult>,
+  options: DescribeOptions,
 ) {
-  const description = findSObjectDescription(object, descriptions);
+  const description = findSObjectDescription(objectName, descriptions, options);
   if (description) {
-    const fieldNameLowerCase = fieldName.toLowerCase();
-    let field = description.fields.find(
-      ({ name }) => name.toLowerCase() === fieldNameLowerCase,
+    const fields = new Map(
+      description.fields.map((field) => [field.name.toLowerCase(), field]),
     );
-    if (!field) {
-      const fieldNameNoNamespace = removeNamespace(fieldNameLowerCase);
-      field = description.fields.find(
-        ({ name }) => name.toLowerCase() === fieldNameNoNamespace,
-      );
-    }
-    return field;
+    return getTargetByIdentifierInNamespace(
+      fields,
+      fieldName.toLowerCase(),
+      options.defaultNamespace,
+    );
   }
 }
 
@@ -57,40 +85,42 @@ export interface Describer {
 export async function describeSObjects(
   conn: Connection,
   objects: string[],
+  options: DescribeOptions,
 ): Promise<Describer> {
-  const descriptions = (
-    await Promise.all(
-      objects.map(async (object) =>
-        conn
-          .describe(object)
-          .catch((err) => {
-            const object2 = removeNamespace(object);
-            if (object !== object2) {
-              return conn.describe(removeNamespace(object));
-            }
-            throw err;
-          })
-          .catch((err) => {
-            if (err.name === 'NOT_FOUND') {
-              throw new Error(`No object schema found: ${object}`);
-            }
-            throw err;
-          }),
-      ),
-    )
-  ).reduce(
-    (describedMap, described) => ({
-      ...describedMap,
-      [described.name.toLowerCase()]: described,
-    }),
-    {} as DescribeSObjectResultMap,
+  const descriptions = new Map<string, DescribeSObjectResult>(
+    (
+      await Promise.all(
+        objects.map(async (object) =>
+          conn
+            .describe(object)
+            .catch((err) => {
+              if (options.defaultNamespace) {
+                const object2 = removeNamespace(
+                  object,
+                  options.defaultNamespace,
+                );
+                if (object !== object2) {
+                  return conn.describe(object2);
+                }
+              }
+              throw err;
+            })
+            .catch((err) => {
+              if (err.name === 'NOT_FOUND') {
+                throw new Error(`No object schema found: ${object}`);
+              }
+              throw err;
+            }),
+        ),
+      )
+    ).map((described) => [described.name.toLowerCase(), described]),
   );
   return {
-    findSObjectDescription(object: string) {
-      return findSObjectDescription(object, descriptions);
+    findSObjectDescription(objectName: string) {
+      return findSObjectDescription(objectName, descriptions, options);
     },
-    findFieldDescription(object: string, fieldName: string) {
-      return findFieldDescription(object, fieldName, descriptions);
+    findFieldDescription(objectName: string, fieldName: string) {
+      return findFieldDescription(objectName, fieldName, descriptions, options);
     },
   };
 }

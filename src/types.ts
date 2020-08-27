@@ -1,6 +1,6 @@
 import { DescribeSObjectResult, Record as SFRecord } from 'jsforce';
 
-export type DescribeSObjectResultMap = Record<string, DescribeSObjectResult>;
+export type DescribeSObjectResultMap = Map<string, DescribeSObjectResult>;
 
 export type UploadInput = {
   object: string;
@@ -63,3 +63,8 @@ export type DumpQuery = {
   object: string;
   fields?: string[];
 } & DumpTarget;
+
+export type DumpOptions = {
+  defaultNamespace?: string;
+  maxFetchSize?: number;
+};
