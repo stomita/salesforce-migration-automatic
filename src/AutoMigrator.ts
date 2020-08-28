@@ -45,7 +45,7 @@ export class AutoMigrator extends EventEmitter {
   /**
    * Dump the record data as CSV
    */
-  async dumpAsCSVData(queries: DumpQuery[], options: DumpOptions) {
+  async dumpAsCSVData(queries: DumpQuery[], options: DumpOptions = {}) {
     const conn = this._conn;
     return dumpAsCSVData(
       conn,
