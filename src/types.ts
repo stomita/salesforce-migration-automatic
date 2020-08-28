@@ -44,6 +44,10 @@ export type UploadProgress = {
   failureCount: number;
 };
 
+export type UploadOptions = {
+  defaultNamespace?: string;
+};
+
 export type RelatedTarget = {
   target: 'related';
 };

@@ -2,12 +2,13 @@ import { Connection, Record as SFRecord } from 'jsforce';
 import stringify from 'csv-stringify';
 import { DumpQuery, QueryTarget, RelatedTarget, DumpOptions } from './types';
 import { describeSObjects, Describer } from './describe';
+import { getMapValue, includesInNamespace, getRecordFieldValue } from './util';
 
 /**
  *
  */
-type FetchedRecordsMap = Record<string, SFRecord[]>;
-type FetchedIdsMap = Record<string, Set<string>>;
+type FetchedRecordsMap = Map<string, SFRecord[]>;
+type FetchedIdsMap = Map<string, Set<string>>;
 
 function getTargetFields(query: DumpQuery, describer: Describer) {
   if (query.target === 'query' && query.fields) {
@@ -59,8 +60,8 @@ async function queryPrimaryRecords(
   describer: Describer,
   options: DumpOptions,
 ) {
-  const fetchedRecordsMap: FetchedRecordsMap = {};
-  const fetchedIdsMap: FetchedIdsMap = {};
+  const fetchedRecordsMap: FetchedRecordsMap = new Map();
+  const fetchedIdsMap: FetchedIdsMap = new Map();
   await Promise.all(
     queries
       .filter((query) => query.target === 'query')
@@ -70,8 +71,8 @@ async function queryPrimaryRecords(
         }
         const records = await queryRecords(conn, query, describer, options);
         const ids = new Set([...records.map((record) => record.Id)]);
-        fetchedRecordsMap[query.object] = records;
-        fetchedIdsMap[query.object] = ids;
+        fetchedRecordsMap.set(query.object, records);
+        fetchedIdsMap.set(query.object, ids);
       }),
   );
   return { fetchedRecordsMap, fetchedIdsMap };
@@ -82,23 +83,32 @@ function getFetchingIds(
   fetchedRecordsMap: FetchedRecordsMap,
   fetchedIds: Set<string>,
   describer: Describer,
+  options: DumpOptions,
 ) {
   const fetchingIds = new Set<string>();
-  for (const objectKey of Object.keys(fetchedRecordsMap)) {
+  for (const objectKey of fetchedRecordsMap.keys()) {
     const description = describer.findSObjectDescription(objectKey);
     if (!description) {
       continue;
     }
     const { fields } = description;
-    const fetchedRecords = fetchedRecordsMap[objectKey] || [];
+    const fetchedRecords = fetchedRecordsMap.get(objectKey) ?? [];
     for (const field of fields) {
       if (
         field.createable &&
         field.type === 'reference' &&
-        (field.referenceTo || []).indexOf(object) >= 0
+        includesInNamespace(
+          field.referenceTo ?? [],
+          object,
+          options.defaultNamespace,
+        )
       ) {
         for (const record of fetchedRecords) {
-          const refId = record[field.name];
+          const refId: string | undefined = getRecordFieldValue(
+            record,
+            field.name,
+            options.defaultNamespace,
+          );
           if (refId && !fetchedIds.has(refId)) {
             fetchingIds.add(refId);
           }
@@ -123,6 +133,7 @@ async function fetchDependentRecords(
     fetchedRecordsMap,
     fetchedIds,
     describer,
+    options,
   );
   if (fetchingIds.size === 0) {
     return [];
@@ -141,13 +152,13 @@ async function fetchAllDependentRecords(
   describer: Describer,
   options: DumpOptions,
 ) {
-  const newlyFetchedIdsMap: FetchedIdsMap = {};
+  const newlyFetchedIdsMap: FetchedIdsMap = new Map();
   for (const query of queries) {
     if (query.target !== 'related') {
       continue;
     }
-    const fetchedRecords = fetchedRecordsMap[query.object] || [];
-    const fetchedIds = fetchedIdsMap[query.object] || new Set<string>();
+    const fetchedRecords = fetchedRecordsMap.get(query.object) ?? [];
+    const fetchedIds = fetchedIdsMap.get(query.object) ?? new Set<string>();
     const newlyFetchedIds = new Set<string>();
     const records = await fetchDependentRecords(
       conn,
@@ -163,9 +174,9 @@ async function fetchAllDependentRecords(
       fetchedIds.add(id);
       newlyFetchedIds.add(id);
     }
-    fetchedRecordsMap[query.object] = fetchedRecords;
-    fetchedIdsMap[query.object] = fetchedIds;
-    newlyFetchedIdsMap[query.object] = newlyFetchedIds;
+    fetchedRecordsMap.set(query.object, fetchedRecords);
+    fetchedIdsMap.set(query.object, fetchedIds);
+    newlyFetchedIdsMap.set(query.object, newlyFetchedIds);
   }
   return newlyFetchedIdsMap;
 }
@@ -174,8 +185,9 @@ function getParentRelationsMap(
   object: string,
   newlyFetchedIdsMap: FetchedIdsMap,
   describer: Describer,
+  options: DumpOptions,
 ) {
-  const parentRelationsMap: Record<string, Set<string>> = {};
+  const parentRelationsMap = new Map<string, Set<string>>();
   const description = describer.findSObjectDescription(object);
   if (!description) {
     throw new Error(`No object description found: ${object}`);
@@ -183,16 +195,20 @@ function getParentRelationsMap(
   const { fields } = description;
   for (const field of fields) {
     if (field.createable && field.type === 'reference') {
-      for (const refObject of field.referenceTo || []) {
-        const newlyFetchedIds = newlyFetchedIdsMap[refObject];
+      for (const refObject of field.referenceTo ?? []) {
+        const newlyFetchedIds = getMapValue(
+          newlyFetchedIdsMap,
+          refObject,
+          options.defaultNamespace,
+        );
         if (!newlyFetchedIds || newlyFetchedIds.size === 0) {
           continue;
         }
-        const refIds = parentRelationsMap[field.name] || new Set<string>();
-        for (const newId of Array.from(newlyFetchedIds)) {
-          refIds.add(newId);
-        }
-        parentRelationsMap[field.name] = refIds;
+        const refIds = new Set([
+          ...(parentRelationsMap.get(field.name) ?? []),
+          ...newlyFetchedIds,
+        ]);
+        parentRelationsMap.set(field.name, refIds);
       }
     }
   }
@@ -211,11 +227,12 @@ async function fetchRelatedRecords(
     query.object,
     newlyFetchedIdsMap,
     describer,
+    options,
   );
-  const conditions = Object.keys(parentRelationsMap).map((refField) => {
-    const refIds = parentRelationsMap[refField];
-    return `${refField} IN ('${Array.from(refIds.values()).join("', '")}')`;
-  });
+  const conditions = Array.from(parentRelationsMap.entries()).map(
+    ([refField, refIds]) =>
+      `${refField} IN ('${Array.from(refIds.values()).join("', '")}')`,
+  );
   if (conditions.length === 0) {
     return [];
   }
@@ -238,10 +255,10 @@ async function fetchAllRelatedRecords(
     if (query.target !== 'related') {
       continue;
     }
-    const fetchedRecords = fetchedRecordsMap[query.object] || [];
-    const fetchedIds = fetchedIdsMap[query.object] || new Set<string>();
+    const fetchedRecords = fetchedRecordsMap.get(query.object) ?? [];
+    const fetchedIds = fetchedIdsMap.get(query.object) ?? new Set<string>();
     const newlyFetchedIds =
-      newlyFetchedIdsMap[query.object] || new Set<string>();
+      newlyFetchedIdsMap.get(query.object) ?? new Set<string>();
     const records = await fetchRelatedRecords(
       conn,
       query,
@@ -257,16 +274,19 @@ async function fetchAllRelatedRecords(
         newlyFetchedIds.add(id);
       }
     }
-    fetchedRecordsMap[query.object] = fetchedRecords;
-    fetchedIdsMap[query.object] = fetchedIds;
-    newlyFetchedIdsMap[query.object] = newlyFetchedIds;
+    fetchedRecordsMap.set(query.object, fetchedRecords);
+    fetchedIdsMap.set(query.object, fetchedIds);
+    newlyFetchedIdsMap.set(query.object, newlyFetchedIds);
   }
   return newlyFetchedIdsMap;
 }
 
 function calcFetchedCount(fetchedIdsMap: FetchedIdsMap) {
-  return Object.keys(fetchedIdsMap)
-    .map((object) => [object, fetchedIdsMap[object].size] as [string, number])
+  return Array.from(fetchedIdsMap.keys())
+    .map(
+      (object) =>
+        [object, fetchedIdsMap.get(object)?.size ?? 0] as [string, number],
+    )
     .reduce(
       ([fetchedCount, fetchedCountPerObject], [object, count]) =>
         [
@@ -288,7 +308,7 @@ async function dumpRecordsAsCSV(
   return Promise.all(
     queries.map(async (query) => {
       const fields = getTargetFields(query, describer);
-      const records = fetchedRecordsMap[query.object] || [];
+      const records = fetchedRecordsMap.get(query.object) ?? [];
       return new Promise<string>((resolve, reject) => {
         stringify(records, { columns: fields, header: true }, (err, ret) => {
           if (err) {

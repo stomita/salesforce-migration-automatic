@@ -1,5 +1,5 @@
 import { Connection, DescribeSObjectResult, Field } from 'jsforce';
-import { removeNamespace, addNamespace } from './util';
+import { getMapValue, removeNamespace } from './util';
 
 /**
  *
@@ -11,40 +11,12 @@ type DescribeOptions = {
 /**
  *
  */
-function getTargetByIdentifierInNamespace<T>(
-  map: Map<string, T>,
-  identifier: string,
-  namespace?: string,
-) {
-  let target = map.get(identifier);
-  if (!target && namespace) {
-    const identifierNoNamespace = removeNamespace(identifier, namespace);
-    if (identifierNoNamespace !== identifier) {
-      target = map.get(identifierNoNamespace);
-    }
-    if (!target) {
-      const identifierWithNamespace = addNamespace(identifier, namespace);
-      if (identifierWithNamespace !== identifier) {
-        target = map.get(identifierWithNamespace);
-      }
-    }
-  }
-  return target;
-}
-
-/**
- *
- */
 function findSObjectDescription(
   objectName: string,
   descriptions: Map<string, DescribeSObjectResult>,
   options: DescribeOptions,
 ) {
-  return getTargetByIdentifierInNamespace(
-    descriptions,
-    objectName.toLowerCase(),
-    options.defaultNamespace,
-  );
+  return getMapValue(descriptions, objectName, options.defaultNamespace);
 }
 
 /**
@@ -59,13 +31,9 @@ function findFieldDescription(
   const description = findSObjectDescription(objectName, descriptions, options);
   if (description) {
     const fields = new Map(
-      description.fields.map((field) => [field.name.toLowerCase(), field]),
+      description.fields.map((field) => [field.name, field]),
     );
-    return getTargetByIdentifierInNamespace(
-      fields,
-      fieldName.toLowerCase(),
-      options.defaultNamespace,
-    );
+    return getMapValue(fields, fieldName, options.defaultNamespace);
   }
 }
 
@@ -113,7 +81,7 @@ export async function describeSObjects(
             }),
         ),
       )
-    ).map((described) => [described.name.toLowerCase(), described]),
+    ).map((described) => [described.name, described]),
   );
   return {
     findSObjectDescription(objectName: string) {
