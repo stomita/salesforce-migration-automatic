@@ -1,6 +1,12 @@
 import { EventEmitter } from 'events';
 import { Connection } from 'jsforce';
-import { UploadInput, RecordMappingPolicy, DumpQuery } from './types';
+import {
+  UploadInput,
+  RecordMappingPolicy,
+  DumpQuery,
+  UploadOptions,
+  DumpOptions,
+} from './types';
 import { loadCSVData } from './load';
 import { dumpAsCSVData } from './dump';
 
@@ -18,12 +24,11 @@ export class AutoMigrator extends EventEmitter {
 
   /**
    * Load CSV text data in memory in order to upload to Salesforce
-   *
    */
   async loadCSVData(
     inputs: UploadInput[],
     mappingPolicies: RecordMappingPolicy[] = [],
-    options: Object = {},
+    options: UploadOptions = {},
   ) {
     const conn = this._conn;
     return loadCSVData(
@@ -39,12 +44,16 @@ export class AutoMigrator extends EventEmitter {
 
   /**
    * Dump the record data as CSV
-   * @param queries
    */
-  async dumpAsCSVData(queries: DumpQuery[]) {
+  async dumpAsCSVData(queries: DumpQuery[], options: DumpOptions) {
     const conn = this._conn;
-    return dumpAsCSVData(conn, queries, (params) => {
-      this.emit('dumpProgress', params);
-    });
+    return dumpAsCSVData(
+      conn,
+      queries,
+      (params) => {
+        this.emit('dumpProgress', params);
+      },
+      options,
+    );
   }
 }

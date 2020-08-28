@@ -72,3 +72,8 @@ export type DumpOptions = {
   defaultNamespace?: string;
   maxFetchSize?: number;
 };
+
+export type DumpProgress = {
+  fetchedCount: number;
+  fetchedCountPerObject: { [name: string]: number };
+};

@@ -1,6 +1,12 @@
 import { Connection, Record as SFRecord } from 'jsforce';
 import stringify from 'csv-stringify';
-import { DumpQuery, QueryTarget, RelatedTarget, DumpOptions } from './types';
+import {
+  DumpQuery,
+  QueryTarget,
+  RelatedTarget,
+  DumpOptions,
+  DumpProgress,
+} from './types';
 import { describeSObjects, Describer } from './describe';
 import { getMapValue, includesInNamespace, getRecordFieldValue } from './util';
 
@@ -328,7 +334,7 @@ async function dumpRecordsAsCSV(
 export async function dumpAsCSVData(
   conn: Connection,
   queries: DumpQuery[],
-  reportProgress: (params: any) => void,
+  reportProgress: (progress: DumpProgress) => void,
   options: DumpOptions = {},
 ) {
   const queryObjects = queries.map((query) => query.object);
