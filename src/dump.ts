@@ -8,7 +8,12 @@ import {
   DumpProgress,
 } from './types';
 import { describeSObjects, Describer } from './describe';
-import { getMapValue, includesInNamespace, getRecordFieldValue } from './util';
+import {
+  getMapValue,
+  includesInNamespace,
+  getRecordFieldValue,
+  removeNamespace,
+} from './util';
 
 /**
  *
@@ -310,13 +315,21 @@ async function dumpRecordsAsCSV(
   queries: DumpQuery[],
   fetchedRecordsMap: FetchedRecordsMap,
   describer: Describer,
+  options: DumpOptions,
 ) {
   return Promise.all(
     queries.map(async (query) => {
       const fields = getTargetFields(query, describer);
+      const columns = fields.map((field) => ({
+        // as the records are fetched with no default-namespced field name
+        key: options.defaultNamespace
+          ? removeNamespace(field, options.defaultNamespace)
+          : field,
+        header: field,
+      }));
       const records = fetchedRecordsMap.get(query.object) ?? [];
       return new Promise<string>((resolve, reject) => {
-        stringify(records, { columns: fields, header: true }, (err, ret) => {
+        stringify(records, { columns, header: true }, (err, ret) => {
           if (err) {
             reject(err);
           } else {
@@ -373,5 +386,5 @@ export async function dumpAsCSVData(
     [fetchedCount, fetchedCountPerObject] = calcFetchedCount(fetchedIdsMap);
     reportProgress({ fetchedCount, fetchedCountPerObject });
   }
-  return dumpRecordsAsCSV(queries, fetchedRecordsMap, describer);
+  return dumpRecordsAsCSV(queries, fetchedRecordsMap, describer, options);
 }
