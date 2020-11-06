@@ -240,6 +240,39 @@ ${USER_IDS[1]}
     expect(idMap.size).toBe(5);
   });
 
+  it('should upload data with existing id map', async () => {
+    const am = new AutoMigrator(conn);
+    const { user_id: userId } = await conn.identity();
+    const {
+      totalCount,
+      successes,
+      failures,
+      blocked,
+      idMap,
+    } = await am.loadCSVData(
+      [
+        {
+          object: 'Account',
+          csvData: `
+Id,Name,OwnerId
+${ACCOUNT_IDS[0]},Account 01,${USER_IDS[0]}
+        `.trim(),
+        },
+      ],
+      undefined,
+      new Map([[USER_IDS[0], userId]]),
+    );
+    expect(totalCount).toBe(1);
+    expect(successes).toBeDefined();
+    expect(successes.length).toBe(1);
+    expect(failures).toBeDefined();
+    expect(failures.length).toBe(0);
+    expect(blocked).toBeDefined();
+    expect(blocked.length).toBe(0);
+    expect(idMap).toBeDefined();
+    expect(idMap.size).toBe(2);
+  });
+
   it('should upload data from csv', async () => {
     const accCnt = await conn.sobject('Account').count();
     const oppCnt = await conn.sobject('Opportunity').count();
