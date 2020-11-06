@@ -20,11 +20,22 @@ describe('AutoMigrator', () => {
 
   it('should upload empty data', async () => {
     const am = new AutoMigrator(conn);
-    const { successes, failures } = await am.loadCSVData([]);
+    const {
+      totalCount,
+      successes,
+      failures,
+      blocked,
+      idMap,
+    } = await am.loadCSVData([]);
+    expect(totalCount).toBe(0);
     expect(successes).toBeDefined();
     expect(successes.length).toBe(0);
     expect(failures).toBeDefined();
     expect(failures.length).toBe(0);
+    expect(blocked).toBeDefined();
+    expect(blocked.length).toBe(0);
+    expect(idMap).toBeDefined();
+    expect(idMap.size).toBe(0);
   });
 
   it('should upload data from csv', async () => {
