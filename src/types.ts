@@ -45,6 +45,7 @@ export type UploadStatus = {
     blockingField: string | undefined;
     blockingId: string | undefined;
   }>;
+  idMap: Map<string, string>;
 };
 
 export type UploadResult = UploadStatus;

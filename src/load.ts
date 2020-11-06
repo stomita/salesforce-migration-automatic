@@ -256,6 +256,7 @@ async function uploadDatasets(
       successes: [...uploadStatus.successes, ...successes],
       failures: [...uploadStatus.failures, ...failures],
       blocked,
+      idMap,
     };
     const successCount = newUploadStatus.successes.length;
     const failureCount = newUploadStatus.failures.length;
@@ -271,7 +272,7 @@ async function uploadDatasets(
       reportProgress,
     );
   } else {
-    return uploadStatus;
+    return { ...uploadStatus, blocked };
   }
 }
 
@@ -387,12 +388,13 @@ async function getAllExistingIdMap(
   conn: Connection,
   datasets: LoadDataset[],
   mappingPolicies: RecordMappingPolicy[],
+  initialIdMap: Map<string, string>,
   describer: Describer,
 ) {
   const datasetMap = new Map(
     datasets.map((dataset) => [dataset.object, dataset]),
   );
-  const idMap = (
+  return (
     await Promise.all(
       mappingPolicies.map((policy) => {
         const {
@@ -421,12 +423,7 @@ async function getAllExistingIdMap(
         );
       }),
     )
-  ).reduce(
-    (idMap, ids) => new Map([...idMap, ...ids]),
-    new Map<string, string>(),
-  );
-
-  return idMap;
+  ).reduce((idMap, ids) => new Map([...ids, ...idMap]), initialIdMap);
 }
 
 /**
@@ -436,6 +433,7 @@ async function upload(
   conn: Connection,
   datasets: LoadDataset[],
   mappingPolicies: RecordMappingPolicy[],
+  initialIdMap: Map<string, string>,
   reportProgress: (progress: UploadProgress) => void,
   options: UploadOptions,
 ) {
@@ -447,6 +445,7 @@ async function upload(
     conn,
     datasets,
     mappingPolicies,
+    initialIdMap,
     describer,
   );
   const uploadStatus = {
@@ -454,6 +453,7 @@ async function upload(
     successes: [],
     failures: [],
     blocked: [],
+    idMap,
   };
   return uploadDatasets(
     conn,
@@ -497,9 +497,17 @@ export async function loadCSVData(
   conn: Connection,
   inputs: UploadInput[],
   mappingPolicies: RecordMappingPolicy[],
+  initialIdMap: Map<string, string>,
   reportUpload: (status: UploadProgress) => void,
   options: UploadOptions = {},
 ) {
   const datasets = await parseCSVInputs(inputs, options);
-  return upload(conn, datasets, mappingPolicies, reportUpload, options);
+  return upload(
+    conn,
+    datasets,
+    mappingPolicies,
+    initialIdMap,
+    reportUpload,
+    options,
+  );
 }
