@@ -44,7 +44,7 @@ describe('AutoMigrator', () => {
     const mappingPolicies = [
       {
         object: 'User',
-        keyField: 'FederationIdentifier',
+        keyFields: ['FederationIdentifier'],
       },
     ];
     am.on('loadProgress', ({ totalCount, successCount, failureCount }) => {

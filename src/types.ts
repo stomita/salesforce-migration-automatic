@@ -9,7 +9,8 @@ export type UploadInput = {
 
 export type RecordMappingPolicy = {
   object: string;
-  keyField: string;
+  keyField?: string;
+  keyFields?: string | string[];
 };
 
 export type UploadStatus = {
