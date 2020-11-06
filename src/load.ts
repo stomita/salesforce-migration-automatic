@@ -7,6 +7,7 @@ import {
   UploadProgress,
   RecordMappingPolicy,
   UploadOptions,
+  RecordSpecifier,
 } from './types';
 import { describeSObjects, Describer } from './describe';
 
@@ -281,6 +282,7 @@ async function getExistingIdMap(
   conn: Connection,
   dataset: LoadDataset,
   keyFields: string[],
+  defaultMapping: RecordSpecifier | undefined,
   describer: Describer,
 ) {
   const idMap = new Map<string, string>();
@@ -298,56 +300,81 @@ async function getExistingIdMap(
       idIndex = i;
     }
   }
-  if (idIndex < 0 || keyIndexMap.size === 0) {
+  if (idIndex < 0) {
     return idMap;
   }
-  const keyMap = new Map<string, string>();
-  const keyFieldConditionValues = new Map<string, Set<any>>();
-  for (const row of rows) {
-    const id = row[idIndex];
-    if (id != null && id !== '') {
-      const keyValueTpl = [];
-      for (const keyField of keyFields) {
-        const keyIndex = keyIndexMap.get(keyField);
-        const keyFieldValue = keyIndex != null ? row[keyIndex] : null;
-        const keyFieldValues =
-          keyFieldConditionValues.get(keyField) ?? new Set<any>();
-        keyFieldValues.add(keyFieldValue ?? null);
-        keyFieldConditionValues.set(keyField, keyFieldValues);
-        keyValueTpl.push(keyFieldValue ?? '');
+  if (keyIndexMap.size > 0) {
+    const keyMap = new Map<string, string>();
+    const keyFieldConditionValues = new Map<string, Set<any>>();
+    for (const row of rows) {
+      const id = row[idIndex];
+      if (id != null && id !== '') {
+        const keyValueTpl = [];
+        for (const keyField of keyFields) {
+          const keyIndex = keyIndexMap.get(keyField);
+          const keyFieldValue = keyIndex != null ? row[keyIndex] : null;
+          const keyFieldValues =
+            keyFieldConditionValues.get(keyField) ?? new Set<any>();
+          keyFieldValues.add(keyFieldValue ?? null);
+          keyFieldConditionValues.set(keyField, keyFieldValues);
+          keyValueTpl.push(keyFieldValue ?? '');
+        }
+        const keyValue = keyValueTpl.join('\t').trim();
+        keyMap.set(keyValue, id);
       }
-      const keyValue = keyValueTpl.join('\t').trim();
-      keyMap.set(keyValue, id);
+    }
+    const condition = Array.from(keyFieldConditionValues.keys()).reduce(
+      (cond, keyField) => {
+        const fieldValues = keyFieldConditionValues.get(keyField);
+        return fieldValues
+          ? { ...cond, [keyField]: Array.from(fieldValues) }
+          : cond;
+      },
+      {},
+    );
+    const records: SFRecord[] =
+      keyMap.size === 0
+        ? []
+        : await conn.sobject(object).find(condition, ['Id', ...keyFields]);
+    const newKeyMap = new Map<string, string>();
+    for (const record of records) {
+      const keyValue = keyFields
+        .map((keyField) => record[keyField])
+        .join('\t')
+        .trim();
+      if (keyValue != null) {
+        newKeyMap.set(keyValue, record.Id as string);
+      }
+    }
+    for (const keyValue of keyMap.keys()) {
+      const id = keyMap.get(keyValue);
+      const newId = newKeyMap.get(keyValue);
+      if (id != null && newId != null) {
+        idMap.set(id, newId);
+      }
     }
   }
-  const condition = Array.from(keyFieldConditionValues.keys()).reduce(
-    (cond, keyField) => {
-      const fieldValues = keyFieldConditionValues.get(keyField);
-      return fieldValues
-        ? { ...cond, [keyField]: Array.from(fieldValues) }
-        : cond;
-    },
-    {},
-  );
-  const records: SFRecord[] =
-    keyMap.size === 0
-      ? []
-      : await conn.sobject(object).find(condition, ['Id', ...keyFields]);
-  const newKeyMap = new Map<string, string>();
-  for (const record of records) {
-    const keyValue = keyFields
-      .map((keyField) => record[keyField])
-      .join('\t')
-      .trim();
-    if (keyValue != null) {
-      newKeyMap.set(keyValue, record.Id as string);
+  if (defaultMapping) {
+    let defaultId: string | undefined = undefined;
+    if (typeof defaultMapping === 'string') {
+      defaultId = defaultMapping;
+    } else {
+      const { condition, orderby, offset } = defaultMapping;
+      let soql = `SELECT Id FROM ${object}`;
+      soql += condition ? ` WHERE ${condition}` : '';
+      soql += orderby ? ` ORDER BY ${orderby}` : '';
+      soql += ` LIMIT 1`;
+      soql += offset ? ` OFFSET ${offset}` : '';
+      const { records } = await conn.query<{ Id: string }>(soql);
+      defaultId = records?.[0]?.Id;
     }
-  }
-  for (const keyValue of keyMap.keys()) {
-    const id = keyMap.get(keyValue);
-    const newId = newKeyMap.get(keyValue);
-    if (id != null && newId != null) {
-      idMap.set(id, newId);
+    if (defaultId) {
+      for (const row of rows) {
+        const id = row[idIndex];
+        if (id && !idMap.has(id)) {
+          idMap.set(id, defaultId);
+        }
+      }
     }
   }
   return idMap;
@@ -367,7 +394,13 @@ async function getAllExistingIdMap(
   );
   const idMap = (
     await Promise.all(
-      mappingPolicies.map(({ object, keyField, keyFields: keyFields_ }) => {
+      mappingPolicies.map((policy) => {
+        const {
+          object,
+          keyField,
+          keyFields: keyFields_,
+          defaultMapping,
+        } = policy;
         const dataset = datasetMap.get(object);
         if (!dataset) {
           throw new Error(`Input is not found for mapping object: ${object}`);
@@ -378,13 +411,14 @@ async function getAllExistingIdMap(
             : keyFields_
           : keyField
           ? [keyField]
-          : undefined;
-        if (!keyFields) {
-          throw new Error(
-            `Key field is not specified for mapping object: ${object}`,
-          );
-        }
-        return getExistingIdMap(conn, dataset, keyFields, describer);
+          : [];
+        return getExistingIdMap(
+          conn,
+          dataset,
+          keyFields,
+          defaultMapping,
+          describer,
+        );
       }),
     )
   ).reduce(

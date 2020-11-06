@@ -11,7 +11,17 @@ export type RecordMappingPolicy = {
   object: string;
   keyField?: string;
   keyFields?: string | string[];
+  defaultMapping?: RecordSpecifier;
 };
+
+export type RecordSpecifier =
+  | string
+  | {
+      condition?: string;
+      orderby?: string;
+      offset?: number;
+      scope?: string;
+    };
 
 export type UploadStatus = {
   totalCount: number;
