@@ -22,14 +22,19 @@ type FetchedRecordsMap = Map<string, SFRecord[]>;
 type FetchedIdsMap = Map<string, Set<string>>;
 
 function getTargetFields(query: DumpQuery, describer: Describer) {
-  if (query.target === 'query' && query.fields) {
+  if (query.fields) {
     return query.fields;
+  }
+  let ignoreFields: Set<string> | null = null;
+  if (query.ignoreFields) {
+    ignoreFields = new Set(query.ignoreFields);
   }
   const description = describer.findSObjectDescription(query.object);
   if (!description) {
     throw new Error(`No object description information found: ${query.object}`);
   }
-  return description.fields.map((field) => field.name);
+  const fields = description.fields.map((field) => field.name);
+  return ignoreFields ? fields.filter((f) => !ignoreFields?.has(f)) : fields;
 }
 
 async function executeQuery(
