@@ -15,6 +15,13 @@ beforeAll(async () => {
 /**
  *
  */
+const ACCOUNT_IDS = ['0012800000k4FHkAAM'];
+const CONTACT_IDS = ['0032v00003J3g3PAAR', '0032v00003VNQLtAAP'];
+const USER_IDS = ['00528000002J6BkAAK', '0052v00000g3SEkAAM'];
+
+/**
+ *
+ */
 describe('AutoMigrator', () => {
   jest.setTimeout(300000);
 
@@ -51,7 +58,7 @@ describe('AutoMigrator', () => {
         object: 'Account',
         csvData: `
 Id,Name,OwnerId
-0012800000k4FHkAAM,Account 01,00528000002J6BkAAK
+${ACCOUNT_IDS[0]},Account 01,${USER_IDS[0]}
         `.trim(),
       },
       {
@@ -67,9 +74,9 @@ Id,Name,OwnerId
     expect(blocked).toBeDefined();
     expect(blocked.length).toBe(1);
     expect(blocked[0].object).toBe('Account');
-    expect(blocked[0].origId).toBe('0012800000k4FHkAAM');
+    expect(blocked[0].origId).toBe(ACCOUNT_IDS[0]);
     expect(blocked[0].blockingField).toBe('OwnerId');
-    expect(blocked[0].blockingId).toBe('00528000002J6BkAAK');
+    expect(blocked[0].blockingId).toBe(USER_IDS[0]);
     expect(idMap).toBeDefined();
     expect(idMap.size).toBe(0);
   });
@@ -84,18 +91,18 @@ Id,Name,OwnerId
       idMap,
     } = await am.loadCSVData([
       {
-        // account with no name field will fail
+        // account with no name field (will fail to load)
         object: 'Account',
         csvData: `
 Id,Name,Type
-0012800000k4FHkAAM,,Partner
+${ACCOUNT_IDS[0]},,Partner
         `.trim(),
       },
       {
         object: 'Contact',
         csvData: `
 Id,FirstName,LastName,AccountId
-0032v00003J3g3PAAR,Sarah,Connor,0012800000k4FHkAAM
+${CONTACT_IDS[0]},Sarah,Connor,${ACCOUNT_IDS[0]}
         `.trim(),
       },
     ]);
@@ -105,13 +112,13 @@ Id,FirstName,LastName,AccountId
     expect(failures).toBeDefined();
     expect(failures.length).toBe(1);
     expect(failures[0].object).toBe('Account');
-    expect(failures[0].origId).toBe('0012800000k4FHkAAM');
+    expect(failures[0].origId).toBe(ACCOUNT_IDS[0]);
     expect(blocked).toBeDefined();
     expect(blocked.length).toBe(1);
     expect(blocked[0].object).toBe('Contact');
-    expect(blocked[0].origId).toBe('0032v00003J3g3PAAR');
+    expect(blocked[0].origId).toBe(CONTACT_IDS[0]);
     expect(blocked[0].blockingField).toBe('AccountId');
-    expect(blocked[0].blockingId).toBe('0012800000k4FHkAAM');
+    expect(blocked[0].blockingId).toBe(ACCOUNT_IDS[0]);
     expect(idMap).toBeDefined();
     expect(idMap.size).toBe(0);
   });
