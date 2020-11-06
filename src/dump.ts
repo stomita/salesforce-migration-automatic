@@ -65,7 +65,7 @@ async function queryRecords(
   soql += query.scope ? ` USING SCOPE ${query.scope}` : '';
   soql += query.condition ? ` WHERE ${query.condition}` : '';
   soql += query.orderby ? ` ORDER BY ${query.orderby}` : '';
-  soql += query.condition ? ` LIMIT ${query.limit}` : '';
+  soql += query.limit ? ` LIMIT ${query.limit}` : '';
   soql += query.offset ? ` OFFSET ${query.offset}` : '';
   return executeQuery(conn, soql, options);
 }
