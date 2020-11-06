@@ -38,6 +38,84 @@ describe('AutoMigrator', () => {
     expect(idMap.size).toBe(0);
   });
 
+  it('should block record upload when dependent id record is not given', async () => {
+    const am = new AutoMigrator(conn);
+    const {
+      totalCount,
+      successes,
+      failures,
+      blocked,
+      idMap,
+    } = await am.loadCSVData([
+      {
+        object: 'Account',
+        csvData: `
+Id,Name,OwnerId
+0012800000k4FHkAAM,Account 01,00528000002J6BkAAK
+        `.trim(),
+      },
+      {
+        object: 'User',
+        csvData: 'Id,Name',
+      },
+    ]);
+    expect(totalCount).toBe(1);
+    expect(successes).toBeDefined();
+    expect(successes.length).toBe(0);
+    expect(failures).toBeDefined();
+    expect(failures.length).toBe(0);
+    expect(blocked).toBeDefined();
+    expect(blocked.length).toBe(1);
+    expect(blocked[0].object).toBe('Account');
+    expect(blocked[0].origId).toBe('0012800000k4FHkAAM');
+    expect(blocked[0].blockingField).toBe('OwnerId');
+    expect(blocked[0].blockingId).toBe('00528000002J6BkAAK');
+    expect(idMap).toBeDefined();
+    expect(idMap.size).toBe(0);
+  });
+
+  it('should block record upload when dependent id record fails', async () => {
+    const am = new AutoMigrator(conn);
+    const {
+      totalCount,
+      successes,
+      failures,
+      blocked,
+      idMap,
+    } = await am.loadCSVData([
+      {
+        // account with no name field will fail
+        object: 'Account',
+        csvData: `
+Id,Name,Type
+0012800000k4FHkAAM,,Partner
+        `.trim(),
+      },
+      {
+        object: 'Contact',
+        csvData: `
+Id,FirstName,LastName,AccountId
+0032v00003J3g3PAAR,Sarah,Connor,0012800000k4FHkAAM
+        `.trim(),
+      },
+    ]);
+    expect(totalCount).toBe(2);
+    expect(successes).toBeDefined();
+    expect(successes.length).toBe(0);
+    expect(failures).toBeDefined();
+    expect(failures.length).toBe(1);
+    expect(failures[0].object).toBe('Account');
+    expect(failures[0].origId).toBe('0012800000k4FHkAAM');
+    expect(blocked).toBeDefined();
+    expect(blocked.length).toBe(1);
+    expect(blocked[0].object).toBe('Contact');
+    expect(blocked[0].origId).toBe('0032v00003J3g3PAAR');
+    expect(blocked[0].blockingField).toBe('AccountId');
+    expect(blocked[0].blockingId).toBe('0012800000k4FHkAAM');
+    expect(idMap).toBeDefined();
+    expect(idMap.size).toBe(0);
+  });
+
   it('should upload data from csv', async () => {
     const accCnt = await conn.sobject('Account').count();
     const oppCnt = await conn.sobject('Opportunity').count();
