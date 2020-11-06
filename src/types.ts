@@ -65,8 +65,8 @@ export type DumpTarget = QueryTarget | RelatedTarget;
 
 export type DumpQuery = {
   object: string;
-  fields?: string[];
-  ignoreFields?: string[];
+  fields?: string | string[];
+  ignoreFields?: string | string[];
 } & DumpTarget;
 
 export type DumpOptions = {

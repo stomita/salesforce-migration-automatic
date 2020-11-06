@@ -23,11 +23,17 @@ type FetchedIdsMap = Map<string, Set<string>>;
 
 function getTargetFields(query: DumpQuery, describer: Describer) {
   if (query.fields) {
-    return query.fields;
+    return typeof query.fields === 'string'
+      ? query.fields.split(/\s*,\s*/)
+      : query.fields;
   }
   let ignoreFields: Set<string> | null = null;
   if (query.ignoreFields) {
-    ignoreFields = new Set(query.ignoreFields);
+    ignoreFields = new Set(
+      typeof query.ignoreFields === 'string'
+        ? query.ignoreFields.split(/\s*,\s*/)
+        : query.ignoreFields,
+    );
   }
   const description = describer.findSObjectDescription(query.object);
   if (!description) {
