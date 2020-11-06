@@ -58,6 +58,7 @@ export type UploadProgress = {
 
 export type UploadOptions = {
   defaultNamespace?: string;
+  idMap?: Map<string, string>;
 };
 
 export type RelatedTarget = {

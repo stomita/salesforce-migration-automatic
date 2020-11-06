@@ -28,7 +28,6 @@ export class AutoMigrator extends EventEmitter {
   async loadCSVData(
     inputs: UploadInput[],
     mappingPolicies: RecordMappingPolicy[] = [],
-    initialIdMap: Map<string, string> = new Map<string, string>(),
     options: UploadOptions = {},
   ) {
     const conn = this._conn;
@@ -36,7 +35,6 @@ export class AutoMigrator extends EventEmitter {
       conn,
       inputs,
       mappingPolicies,
-      initialIdMap,
       (params) => {
         this.emit('loadProgress', params);
       },

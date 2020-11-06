@@ -388,7 +388,7 @@ async function getAllExistingIdMap(
   conn: Connection,
   datasets: LoadDataset[],
   mappingPolicies: RecordMappingPolicy[],
-  initialIdMap: Map<string, string>,
+  initialIdMap: Map<string, string> = new Map<string, string>(),
   describer: Describer,
 ) {
   const datasetMap = new Map(
@@ -433,7 +433,6 @@ async function upload(
   conn: Connection,
   datasets: LoadDataset[],
   mappingPolicies: RecordMappingPolicy[],
-  initialIdMap: Map<string, string>,
   reportProgress: (progress: UploadProgress) => void,
   options: UploadOptions,
 ) {
@@ -445,7 +444,7 @@ async function upload(
     conn,
     datasets,
     mappingPolicies,
-    initialIdMap,
+    options.idMap,
     describer,
   );
   const uploadStatus = {
@@ -497,17 +496,9 @@ export async function loadCSVData(
   conn: Connection,
   inputs: UploadInput[],
   mappingPolicies: RecordMappingPolicy[],
-  initialIdMap: Map<string, string>,
   reportUpload: (status: UploadProgress) => void,
   options: UploadOptions = {},
 ) {
   const datasets = await parseCSVInputs(inputs, options);
-  return upload(
-    conn,
-    datasets,
-    mappingPolicies,
-    initialIdMap,
-    reportUpload,
-    options,
-  );
+  return upload(conn, datasets, mappingPolicies, reportUpload, options);
 }

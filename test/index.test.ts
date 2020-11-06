@@ -260,7 +260,7 @@ ${ACCOUNT_IDS[0]},Account 01,${USER_IDS[0]}
         },
       ],
       undefined,
-      new Map([[USER_IDS[0], userId]]),
+      { idMap: new Map([[USER_IDS[0], userId]]) },
     );
     expect(totalCount).toBe(1);
     expect(successes).toBeDefined();
