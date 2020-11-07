@@ -1,8 +1,9 @@
 import path from 'path';
 import fs from 'fs-extra';
 import { AutoMigrator, DumpQuery } from '../src';
+import { parseCSV } from '../src/csv';
 import { Connection } from 'jsforce';
-import { getConnection } from './util/getConnection';
+import { getConnection } from './util/connection';
 
 let conn: Connection;
 
@@ -15,7 +16,7 @@ beforeAll(async () => {
 /**
  *
  */
-const ACCOUNT_IDS = ['0012800000k4FHkAAM'];
+const ACCOUNT_IDS = ['0012800000k4FHkAAM', '0012v00002jFM1lAAG'];
 const CONTACT_IDS = ['0032v00003J3g3PAAR', '0032v00003VNQLtAAP'];
 const USER_IDS = ['00528000002J6BkAAK', '0052v00000g3SEkAAM'];
 
@@ -347,6 +348,63 @@ ${ACCOUNT_IDS[0]},Account 01,${USER_IDS[0]}
     for (const csv of csvs) {
       expect(typeof csv).toBe('string');
       expect(csv.trim().split(/\n/).length).toBeGreaterThan(1);
+    }
+  });
+
+  it('should download data with existing id map', async () => {
+    const am = new AutoMigrator(conn);
+    const { user_id: userId } = await conn.identity();
+    const accountCSV = `
+Id,Name,OwnerId
+${ACCOUNT_IDS[0]},Account #A,${USER_IDS[0]}
+${ACCOUNT_IDS[1]},Account #B,${USER_IDS[0]}
+  `.trim();
+    const userCSV = `
+Id
+${USER_IDS[0]}
+  `.trim();
+
+    const { idMap } = await am.loadCSVData(
+      [
+        {
+          object: 'Account',
+          csvData: accountCSV,
+        },
+        {
+          object: 'User',
+          csvData: userCSV,
+        },
+      ],
+      [
+        {
+          object: 'User',
+          defaultMapping: userId,
+        },
+      ],
+    );
+    const queries: DumpQuery[] = [
+      {
+        object: 'Account',
+        target: 'query',
+        condition: "Name LIKE 'Account #%'",
+        orderby: 'Name ASC',
+      },
+    ];
+    const csvs = await am.dumpAsCSVData(queries, { idMap });
+    expect(csvs).toBeDefined();
+    expect(csvs.length).toBe(queries.length);
+    for (const csv of csvs) {
+      expect(typeof csv).toBe('string');
+      const [rec1, rec2] = await parseCSV<{ Id: string; OwnerId: string }>(
+        csv,
+        { columns: true },
+      );
+      expect(rec1).toBeDefined();
+      expect(rec1.Id).toBe(ACCOUNT_IDS[0]);
+      expect(rec1.OwnerId).toBe(USER_IDS[0]);
+      expect(rec2).toBeDefined();
+      expect(rec2.Id).toBe(ACCOUNT_IDS[1]);
+      expect(rec2.OwnerId).toBe(USER_IDS[0]);
     }
   });
 });
