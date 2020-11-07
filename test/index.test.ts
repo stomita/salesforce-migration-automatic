@@ -82,6 +82,63 @@ ${ACCOUNT_IDS[0]},Account 01,${USER_IDS[0]}
     expect(idMap.size).toBe(0);
   });
 
+  it('should upload only selected fields', async () => {
+    const am = new AutoMigrator(conn);
+    const {
+      totalCount,
+      successes,
+      failures,
+      blocked,
+      idMap,
+    } = await am.loadCSVData([
+      {
+        object: 'Account',
+        csvData: `
+Id,Name,Type,OwnerId
+${ACCOUNT_IDS[0]},Account With Fields,Customer,${USER_IDS[0]}
+        `.trim(),
+        fields: ['Id', 'Name'],
+      },
+      {
+        object: 'Contact',
+        csvData: `
+Id,FirstName,LastName,Email,AccountId,OwnerId
+${CONTACT_IDS[0]},Contact With ignoreFields,Doe,admin@example.com,${ACCOUNT_IDS[0]},${USER_IDS[1]}
+        `.trim(),
+        ignoreFields: 'Email, OwnerId',
+      },
+      {
+        object: 'User',
+        csvData: 'Id,Name',
+      },
+    ]);
+    expect(totalCount).toBe(2);
+    expect(successes).toBeDefined();
+    expect(successes.length).toBe(2);
+    expect(failures).toBeDefined();
+    expect(failures.length).toBe(0);
+    expect(blocked).toBeDefined();
+    expect(blocked.length).toBe(0);
+    expect(idMap).toBeDefined();
+    expect(idMap.size).toBe(2);
+    const acc = await conn
+      .sobject('Account')
+      .findOne<{ Id: string; Name: string; Type: string }>({
+        Name: 'Account With Fields',
+      })
+      .sort('CreatedDate', 'DESC');
+    expect(acc).toBeDefined();
+    expect(acc.Type).toBeNull();
+    const cnt = await conn
+      .sobject('Contact')
+      .findOne<{ Id: string; Email: string }>({
+        FirstName: 'Contact With ignoreFields',
+      })
+      .sort('CreatedDate', 'DESC');
+    expect(cnt).toBeDefined();
+    expect(cnt.Email).toBeNull();
+  });
+
   it('should block record upload when dependent id record fails', async () => {
     const am = new AutoMigrator(conn);
     const {
@@ -363,7 +420,6 @@ ${ACCOUNT_IDS[1]},Account #B,${USER_IDS[0]}
 Id
 ${USER_IDS[0]}
   `.trim();
-
     const { idMap } = await am.loadCSVData(
       [
         {
