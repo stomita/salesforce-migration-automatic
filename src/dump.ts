@@ -12,6 +12,7 @@ import {
   includesInNamespace,
   getRecordFieldValue,
   removeNamespace,
+  toStringList,
 } from './util';
 import { stringifyCSV } from './csv';
 
@@ -24,19 +25,11 @@ type FetchedIdsMap = Map<string, Set<string>>;
 function getTargetFieldDefinitions(query: DumpQuery, describer: Describer) {
   let queryFields: Set<string> | null = null;
   if (query.fields) {
-    queryFields = new Set(
-      typeof query.fields === 'string'
-        ? query.fields.split(/\s*,\s*/)
-        : query.fields,
-    );
+    queryFields = new Set(toStringList(query.fields));
   }
   let ignoreFields: Set<string> | null = null;
   if (query.ignoreFields) {
-    ignoreFields = new Set(
-      typeof query.ignoreFields === 'string'
-        ? query.ignoreFields.split(/\s*,\s*/)
-        : query.ignoreFields,
-    );
+    ignoreFields = new Set(toStringList(query.ignoreFields));
   }
   const description = describer.findSObjectDescription(query.object);
   if (!description) {

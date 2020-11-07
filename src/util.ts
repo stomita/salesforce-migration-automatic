@@ -79,3 +79,10 @@ export function includesInNamespace(
   }
   return ret;
 }
+
+/**
+ *
+ */
+export function toStringList(val: string | string[]) {
+  return typeof val === 'string' ? val.split(/\s*,\s*/) : val;
+}

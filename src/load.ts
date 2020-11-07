@@ -10,6 +10,7 @@ import {
 } from './types';
 import { describeSObjects, Describer } from './describe';
 import { parseCSV } from './csv';
+import { toStringList } from './util';
 
 type RecordIdPair = {
   id: string;
@@ -408,9 +409,7 @@ async function getAllExistingIdMap(
           throw new Error(`Input is not found for mapping object: ${object}`);
         }
         const keyFields = keyFields_
-          ? typeof keyFields_ === 'string'
-            ? keyFields_.split(/\s*,\s*/)
-            : keyFields_
+          ? toStringList(keyFields_)
           : keyField
           ? [keyField]
           : [];
