@@ -9,8 +9,19 @@ export type UploadInput = {
 
 export type RecordMappingPolicy = {
   object: string;
-  keyField: string;
+  keyField?: string;
+  keyFields?: string | string[];
+  defaultMapping?: RecordSpecifier;
 };
+
+export type RecordSpecifier =
+  | string
+  | {
+      condition?: string;
+      orderby?: string;
+      offset?: number;
+      scope?: string;
+    };
 
 export type UploadStatus = {
   totalCount: number;
@@ -34,6 +45,7 @@ export type UploadStatus = {
     blockingField: string | undefined;
     blockingId: string | undefined;
   }>;
+  idMap: Map<string, string>;
 };
 
 export type UploadResult = UploadStatus;
@@ -46,6 +58,7 @@ export type UploadProgress = {
 
 export type UploadOptions = {
   defaultNamespace?: string;
+  idMap?: Map<string, string>;
 };
 
 export type RelatedTarget = {

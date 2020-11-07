@@ -7,6 +7,7 @@ import {
   UploadProgress,
   RecordMappingPolicy,
   UploadOptions,
+  RecordSpecifier,
 } from './types';
 import { describeSObjects, Describer } from './describe';
 
@@ -255,6 +256,7 @@ async function uploadDatasets(
       successes: [...uploadStatus.successes, ...successes],
       failures: [...uploadStatus.failures, ...failures],
       blocked,
+      idMap,
     };
     const successCount = newUploadStatus.successes.length;
     const failureCount = newUploadStatus.failures.length;
@@ -270,7 +272,7 @@ async function uploadDatasets(
       reportProgress,
     );
   } else {
-    return uploadStatus;
+    return { ...uploadStatus, blocked };
   }
 }
 
@@ -280,16 +282,18 @@ async function uploadDatasets(
 async function getExistingIdMap(
   conn: Connection,
   dataset: LoadDataset,
-  keyField: string,
+  keyFields: string[],
+  defaultMapping: RecordSpecifier | undefined,
   describer: Describer,
 ) {
   const idMap = new Map<string, string>();
   const { object, headers, rows } = dataset;
   let idIndex = -1;
-  let keyIndex = -1;
+  const keyIndexMap = new Map<string, number>();
+  const keyFieldSet = new Set(keyFields);
   for (const [i, header] of headers.entries()) {
-    if (header === keyField) {
-      keyIndex = i;
+    if (keyFieldSet.has(header)) {
+      keyIndexMap.set(header, i);
       continue;
     }
     const field = describer.findFieldDescription(object, header);
@@ -297,39 +301,81 @@ async function getExistingIdMap(
       idIndex = i;
     }
   }
-  if (idIndex < 0 || keyIndex < 0) {
+  if (idIndex < 0) {
     return idMap;
   }
-  const keyMap = new Map<string, string>();
-  for (const row of rows) {
-    const id = row[idIndex];
-    const keyValue = row[keyIndex];
-    if (id != null && id !== '' && keyValue != null && keyValue !== '') {
-      keyMap.set(keyValue, id);
+  if (keyIndexMap.size > 0) {
+    const keyMap = new Map<string, string>();
+    const keyFieldConditionValues = new Map<string, Set<any>>();
+    for (const row of rows) {
+      const id = row[idIndex];
+      if (id != null && id !== '') {
+        const keyValueTpl = [];
+        for (const keyField of keyFields) {
+          const keyIndex = keyIndexMap.get(keyField);
+          const keyFieldValue = keyIndex != null ? row[keyIndex] : null;
+          const keyFieldValues =
+            keyFieldConditionValues.get(keyField) ?? new Set<any>();
+          keyFieldValues.add(keyFieldValue ?? null);
+          keyFieldConditionValues.set(keyField, keyFieldValues);
+          keyValueTpl.push(keyFieldValue ?? '');
+        }
+        const keyValue = keyValueTpl.join('\t').trim();
+        keyMap.set(keyValue, id);
+      }
+    }
+    const condition = Array.from(keyFieldConditionValues.keys()).reduce(
+      (cond, keyField) => {
+        const fieldValues = keyFieldConditionValues.get(keyField);
+        return fieldValues
+          ? { ...cond, [keyField]: Array.from(fieldValues) }
+          : cond;
+      },
+      {},
+    );
+    const records: SFRecord[] =
+      keyMap.size === 0
+        ? []
+        : await conn.sobject(object).find(condition, ['Id', ...keyFields]);
+    const newKeyMap = new Map<string, string>();
+    for (const record of records) {
+      const keyValue = keyFields
+        .map((keyField) => record[keyField])
+        .join('\t')
+        .trim();
+      if (keyValue != null) {
+        newKeyMap.set(keyValue, record.Id as string);
+      }
+    }
+    for (const keyValue of keyMap.keys()) {
+      const id = keyMap.get(keyValue);
+      const newId = newKeyMap.get(keyValue);
+      if (id != null && newId != null) {
+        idMap.set(id, newId);
+      }
     }
   }
-  const keyValues = Array.from(keyMap.keys());
-  const records: SFRecord[] =
-    keyValues.length === 0
-      ? []
-      : await conn.sobject(object).find(
-          {
-            [keyField]: keyValues,
-          },
-          ['Id', keyField],
-        );
-  const newKeyMap = new Map<string, string>();
-  for (const record of records) {
-    const keyValue: string = record[keyField];
-    if (keyValue != null) {
-      newKeyMap.set(keyValue, record.Id as string);
+  if (defaultMapping) {
+    let defaultId: string | undefined = undefined;
+    if (typeof defaultMapping === 'string') {
+      defaultId = defaultMapping;
+    } else {
+      const { condition, orderby, offset } = defaultMapping;
+      let soql = `SELECT Id FROM ${object}`;
+      soql += condition ? ` WHERE ${condition}` : '';
+      soql += orderby ? ` ORDER BY ${orderby}` : '';
+      soql += ` LIMIT 1`;
+      soql += offset ? ` OFFSET ${offset}` : '';
+      const { records } = await conn.query<{ Id: string }>(soql);
+      defaultId = records?.[0]?.Id;
     }
-  }
-  for (const keyValue of keyValues) {
-    const id = keyMap.get(keyValue);
-    const newId = newKeyMap.get(keyValue);
-    if (id != null && newId != null) {
-      idMap.set(id, newId);
+    if (defaultId) {
+      for (const row of rows) {
+        const id = row[idIndex];
+        if (id && !idMap.has(id)) {
+          idMap.set(id, defaultId);
+        }
+      }
     }
   }
   return idMap;
@@ -342,27 +388,42 @@ async function getAllExistingIdMap(
   conn: Connection,
   datasets: LoadDataset[],
   mappingPolicies: RecordMappingPolicy[],
+  initialIdMap: Map<string, string> = new Map<string, string>(),
   describer: Describer,
 ) {
   const datasetMap = new Map(
     datasets.map((dataset) => [dataset.object, dataset]),
   );
-  const idMap = (
+  return (
     await Promise.all(
-      mappingPolicies.map(({ object, keyField }) => {
+      mappingPolicies.map((policy) => {
+        const {
+          object,
+          keyField,
+          keyFields: keyFields_,
+          defaultMapping,
+        } = policy;
         const dataset = datasetMap.get(object);
         if (!dataset) {
           throw new Error(`Input is not found for mapping object: ${object}`);
         }
-        return getExistingIdMap(conn, dataset, keyField, describer);
+        const keyFields = keyFields_
+          ? typeof keyFields_ === 'string'
+            ? keyFields_.split(/\s*,\s*/)
+            : keyFields_
+          : keyField
+          ? [keyField]
+          : [];
+        return getExistingIdMap(
+          conn,
+          dataset,
+          keyFields,
+          defaultMapping,
+          describer,
+        );
       }),
     )
-  ).reduce(
-    (idMap, ids) => new Map([...idMap, ...ids]),
-    new Map<string, string>(),
-  );
-
-  return idMap;
+  ).reduce((idMap, ids) => new Map([...ids, ...idMap]), initialIdMap);
 }
 
 /**
@@ -383,6 +444,7 @@ async function upload(
     conn,
     datasets,
     mappingPolicies,
+    options.idMap,
     describer,
   );
   const uploadStatus = {
@@ -390,6 +452,7 @@ async function upload(
     successes: [],
     failures: [],
     blocked: [],
+    idMap,
   };
   return uploadDatasets(
     conn,
