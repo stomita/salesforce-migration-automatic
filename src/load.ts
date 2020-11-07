@@ -467,11 +467,38 @@ async function upload(
 async function parseCSVInputs(inputs: UploadInput[], options: Object = {}) {
   return Promise.all(
     inputs.map(async (input) => {
-      const { object, csvData } = input;
-      const [headers, ...rows] = await parseCSV(csvData, options);
+      const { object, csvData, fields, ignoreFields } = input;
+      const results = await parseCSV(csvData, options);
+      const [headers, ...rows] =
+        fields || ignoreFields
+          ? selectCSVColumns(
+              results,
+              fields ? toStringList(fields) : undefined,
+              ignoreFields ? toStringList(ignoreFields) : undefined,
+            )
+          : results;
       return { object, headers, rows };
     }),
   );
+}
+
+function selectCSVColumns(
+  results: string[][],
+  fields: string[] | undefined,
+  ignoreFields: string[] | undefined,
+) {
+  const [headers] = results;
+  const indexes = new Set<number>();
+  for (let i = 0; i < headers.length; i++) {
+    const header = headers[i];
+    if (
+      (!fields || fields.indexOf(header) >= 0) &&
+      (!ignoreFields || ignoreFields.indexOf(header) < 0)
+    ) {
+      indexes.add(i);
+    }
+  }
+  return results.map((row) => row.filter((_, i) => indexes.has(i)));
 }
 
 /**

@@ -5,6 +5,8 @@ export type DescribeSObjectResultMap = Map<string, DescribeSObjectResult>;
 export type UploadInput = {
   object: string;
   csvData: string;
+  fields?: string | string[];
+  ignoreFields?: string | string[];
 };
 
 export type RecordMappingPolicy = {
