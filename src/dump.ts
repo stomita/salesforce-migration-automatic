@@ -1,5 +1,4 @@
 import { Connection, Record as SFRecord } from 'jsforce';
-import stringify from 'csv-stringify';
 import {
   DumpQuery,
   QueryTarget,
@@ -14,6 +13,7 @@ import {
   getRecordFieldValue,
   removeNamespace,
 } from './util';
+import { stringifyCSV } from './csv';
 
 /**
  *
@@ -21,11 +21,14 @@ import {
 type FetchedRecordsMap = Map<string, SFRecord[]>;
 type FetchedIdsMap = Map<string, Set<string>>;
 
-function getTargetFields(query: DumpQuery, describer: Describer) {
+function getTargetFieldDefinitions(query: DumpQuery, describer: Describer) {
+  let queryFields: Set<string> | null = null;
   if (query.fields) {
-    return typeof query.fields === 'string'
-      ? query.fields.split(/\s*,\s*/)
-      : query.fields;
+    queryFields = new Set(
+      typeof query.fields === 'string'
+        ? query.fields.split(/\s*,\s*/)
+        : query.fields,
+    );
   }
   let ignoreFields: Set<string> | null = null;
   if (query.ignoreFields) {
@@ -39,8 +42,16 @@ function getTargetFields(query: DumpQuery, describer: Describer) {
   if (!description) {
     throw new Error(`No object description information found: ${query.object}`);
   }
-  const fields = description.fields.map((field) => field.name);
-  return ignoreFields ? fields.filter((f) => !ignoreFields?.has(f)) : fields;
+  return queryFields
+    ? description.fields.filter((f) => queryFields?.has(f.name))
+    : ignoreFields
+    ? description.fields.filter((f) => !ignoreFields?.has(f.name))
+    : description.fields;
+}
+
+function getTargetFields(query: DumpQuery, describer: Describer) {
+  const fieldDefs = getTargetFieldDefinitions(query, describer);
+  return fieldDefs.map((f) => f.name);
 }
 
 async function executeQuery(
@@ -328,26 +339,38 @@ async function dumpRecordsAsCSV(
   describer: Describer,
   options: DumpOptions,
 ) {
+  const { idMap } = options;
+  const origIdMap = idMap
+    ? new Map(
+        Array.from(idMap.entries()).map(([origId, newId]) => [newId, origId]),
+      )
+    : undefined;
   return Promise.all(
     queries.map(async (query) => {
-      const fields = getTargetFields(query, describer);
-      const columns = fields.map((field) => ({
+      const fieldDefs = getTargetFieldDefinitions(query, describer);
+      const columns = fieldDefs.map((f) => ({
         // as the records are fetched with no default-namespced field name
         key: options.defaultNamespace
-          ? removeNamespace(field, options.defaultNamespace)
-          : field,
-        header: field,
+          ? removeNamespace(f.name, options.defaultNamespace)
+          : f.name,
+        header: f.name,
       }));
-      const records = fetchedRecordsMap.get(query.object) ?? [];
-      return new Promise<string>((resolve, reject) => {
-        stringify(records, { columns, header: true }, (err, ret) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(ret);
-          }
-        });
-      });
+      let records = fetchedRecordsMap.get(query.object) ?? [];
+      if (origIdMap) {
+        const idFields = fieldDefs
+          .filter((f) => f.type === 'id' || f.type === 'reference')
+          .map((f) => f.name);
+        records = records.map((record) =>
+          idFields.reduce(
+            (rec, field) => ({
+              ...rec,
+              [field]: origIdMap.get(rec[field]) ?? rec[field],
+            }),
+            record,
+          ),
+        );
+      }
+      return stringifyCSV(records, columns);
     }),
   );
 }
