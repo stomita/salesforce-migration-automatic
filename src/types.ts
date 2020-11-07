@@ -57,6 +57,7 @@ export type UploadProgress = {
 };
 
 export type UploadOptions = {
+  csvParseOptions?: Object;
   defaultNamespace?: string;
   idMap?: Map<string, string>;
 };
@@ -85,6 +86,7 @@ export type DumpQuery = {
 export type DumpOptions = {
   defaultNamespace?: string;
   maxFetchSize?: number;
+  idMap?: Map<string, string>;
 };
 
 export type DumpProgress = {

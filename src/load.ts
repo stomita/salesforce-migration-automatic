@@ -1,5 +1,4 @@
 import { Connection, Record as SFRecord } from 'jsforce';
-import parse from 'csv-parse';
 import {
   UploadInput,
   UploadResult,
@@ -10,6 +9,7 @@ import {
   RecordSpecifier,
 } from './types';
 import { describeSObjects, Describer } from './describe';
+import { parseCSV } from './csv';
 
 type RecordIdPair = {
   id: string;
@@ -465,25 +465,11 @@ async function upload(
   );
 }
 
-async function parseCSVInputs(inputs: UploadInput[], options: Object) {
+async function parseCSVInputs(inputs: UploadInput[], options: Object = {}) {
   return Promise.all(
     inputs.map(async (input) => {
       const { object, csvData } = input;
-      const [headers, ...rows] = await new Promise<string[][]>(
-        (resolve, reject) => {
-          parse(
-            csvData,
-            options,
-            (err: Error | undefined, rets: string[][]) => {
-              if (err) {
-                reject(err);
-              } else {
-                resolve(rets);
-              }
-            },
-          );
-        },
-      );
+      const [headers, ...rows] = await parseCSV(csvData, options);
       return { object, headers, rows };
     }),
   );
@@ -499,6 +485,6 @@ export async function loadCSVData(
   reportUpload: (status: UploadProgress) => void,
   options: UploadOptions = {},
 ) {
-  const datasets = await parseCSVInputs(inputs, options);
+  const datasets = await parseCSVInputs(inputs, options.csvParseOptions);
   return upload(conn, datasets, mappingPolicies, reportUpload, options);
 }
