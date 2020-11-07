@@ -57,6 +57,7 @@ export type UploadProgress = {
 };
 
 export type UploadOptions = {
+  csvParseOptions?: Object;
   defaultNamespace?: string;
   idMap?: Map<string, string>;
 };
