@@ -45,29 +45,24 @@ function getTargetFieldDefinitions(
   if (!description) {
     throw new Error(`No object description information found: ${query.object}`);
   }
-  const allowFilters: Array<(f: Field) => boolean> = [(f) => f.type === 'id'];
-  const denyFilters: Array<(f: Field) => boolean> = [];
+  const filters: Array<(f: Field) => boolean> = [];
   if (query.fields) {
     const queryFields = new Set(toStringList(query.fields));
-    allowFilters.push((f) => queryFields.has(f.name));
-  }
-  if (query.ignoreFields) {
-    const ignoreFields = new Set(toStringList(query.ignoreFields));
-    denyFilters.push((f) => !ignoreFields.has(f.name));
-  }
-  if (query.ignoreSystemDate || options.ignoreSystemDate) {
-    denyFilters.push((f) => !SYSTEM_DATE_FIELDS.has(f.name));
-  }
-  if (query.ignoreReadOnly || options.ignoreReadOnly) {
-    denyFilters.push((f) => f.createable);
+    filters.push((f) => queryFields.has(f.name));
+  } else {
+    if (query.ignoreFields) {
+      const ignoreFields = new Set(toStringList(query.ignoreFields));
+      filters.push((f) => !ignoreFields.has(f.name));
+    }
+    if (query.ignoreSystemDate || options.ignoreSystemDate) {
+      filters.push((f) => !SYSTEM_DATE_FIELDS.has(f.name));
+    }
+    if (query.ignoreReadOnly || options.ignoreReadOnly) {
+      filters.push((f) => f.createable);
+    }
   }
   return description.fields.filter((f) => {
-    for (const filter of allowFilters) {
-      if (filter(f)) {
-        return true;
-      }
-    }
-    for (const filter of denyFilters) {
+    for (const filter of filters) {
       if (!filter(f)) {
         return false;
       }
