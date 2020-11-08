@@ -1,6 +1,6 @@
 {
   "name": "salesforce-migration-automatic",
-  "version": "3.1.1",
+  "version": "3.1.2",
   "description": "Migrate data from an org to another org, by exporting/importing data as CSVs",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
