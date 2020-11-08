@@ -62,6 +62,9 @@ function getTargetFieldDefinitions(
     }
   }
   return description.fields.filter((f) => {
+    if (f.type === 'id') {
+      return true;
+    }
     for (const filter of filters) {
       if (!filter(f)) {
         return false;
