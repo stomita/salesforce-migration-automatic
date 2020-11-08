@@ -83,12 +83,16 @@ export type DumpQuery = {
   object: string;
   fields?: string | string[];
   ignoreFields?: string | string[];
+  ignoreSystemDate?: boolean;
+  ignoreReadOnly?: boolean;
 } & DumpTarget;
 
 export type DumpOptions = {
   defaultNamespace?: string;
   maxFetchSize?: number;
   idMap?: Map<string, string>;
+  ignoreSystemDate?: boolean;
+  ignoreReadOnly?: boolean;
 };
 
 export type DumpProgress = {
