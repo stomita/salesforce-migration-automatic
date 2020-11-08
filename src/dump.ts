@@ -45,24 +45,30 @@ function getTargetFieldDefinitions(
   if (!description) {
     throw new Error(`No object description information found: ${query.object}`);
   }
-  const fieldFilters: Array<(f: Field) => boolean> = [];
+  const allowFilters: Array<(f: Field) => boolean> = [(f) => f.type === 'id'];
+  const denyFilters: Array<(f: Field) => boolean> = [];
   if (query.fields) {
     const queryFields = new Set(toStringList(query.fields));
-    fieldFilters.push((f) => queryFields.has(f.name));
+    allowFilters.push((f) => queryFields.has(f.name));
   }
   if (query.ignoreFields) {
     const ignoreFields = new Set(toStringList(query.ignoreFields));
-    fieldFilters.push((f) => !ignoreFields.has(f.name));
+    denyFilters.push((f) => !ignoreFields.has(f.name));
   }
   if (query.ignoreSystemDate || options.ignoreSystemDate) {
-    fieldFilters.push((f) => !SYSTEM_DATE_FIELDS.has(f.name));
+    denyFilters.push((f) => !SYSTEM_DATE_FIELDS.has(f.name));
   }
   if (query.ignoreReadOnly || options.ignoreReadOnly) {
-    fieldFilters.push((f) => f.type === 'id' || f.createable);
+    denyFilters.push((f) => f.createable);
   }
   return description.fields.filter((f) => {
-    for (const fieldFilter of fieldFilters) {
-      if (!fieldFilter(f)) {
+    for (const filter of allowFilters) {
+      if (filter(f)) {
+        return true;
+      }
+    }
+    for (const filter of denyFilters) {
+      if (!filter(f)) {
         return false;
       }
     }
