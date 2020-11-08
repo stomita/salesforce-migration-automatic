@@ -1,4 +1,4 @@
-import { Connection, Record as SFRecord } from 'jsforce';
+import { Connection, Field, Record as SFRecord } from 'jsforce';
 import {
   DumpQuery,
   QueryTarget,
@@ -22,28 +22,60 @@ import { stringifyCSV } from './csv';
 type FetchedRecordsMap = Map<string, SFRecord[]>;
 type FetchedIdsMap = Map<string, Set<string>>;
 
-function getTargetFieldDefinitions(query: DumpQuery, describer: Describer) {
-  let queryFields: Set<string> | null = null;
-  if (query.fields) {
-    queryFields = new Set(toStringList(query.fields));
-  }
-  let ignoreFields: Set<string> | null = null;
-  if (query.ignoreFields) {
-    ignoreFields = new Set(toStringList(query.ignoreFields));
-  }
+/**
+ *
+ */
+const SYSTEM_DATE_FIELDS = new Set([
+  'CreatedDate',
+  'LastModifiedDate',
+  'SystemModstamp',
+  'LastViewedDate',
+  'LastReferencedDate',
+]);
+
+/**
+ *
+ */
+function getTargetFieldDefinitions(
+  query: DumpQuery,
+  describer: Describer,
+  options: DumpOptions,
+) {
   const description = describer.findSObjectDescription(query.object);
   if (!description) {
     throw new Error(`No object description information found: ${query.object}`);
   }
-  return queryFields
-    ? description.fields.filter((f) => queryFields?.has(f.name))
-    : ignoreFields
-    ? description.fields.filter((f) => !ignoreFields?.has(f.name))
-    : description.fields;
+  const fieldFilters: Array<(f: Field) => boolean> = [];
+  if (query.fields) {
+    const queryFields = new Set(toStringList(query.fields));
+    fieldFilters.push((f) => queryFields.has(f.name));
+  }
+  if (query.ignoreFields) {
+    const ignoreFields = new Set(toStringList(query.ignoreFields));
+    fieldFilters.push((f) => !ignoreFields.has(f.name));
+  }
+  if (query.ignoreSystemDate || options.ignoreSystemDate) {
+    fieldFilters.push((f) => !SYSTEM_DATE_FIELDS.has(f.name));
+  }
+  if (query.ignoreReadOnly || options.ignoreReadOnly) {
+    fieldFilters.push((f) => f.type === 'id' || f.createable);
+  }
+  return description.fields.filter((f) => {
+    for (const fieldFilter of fieldFilters) {
+      if (!fieldFilter(f)) {
+        return false;
+      }
+    }
+    return true;
+  });
 }
 
-function getTargetFields(query: DumpQuery, describer: Describer) {
-  const fieldDefs = getTargetFieldDefinitions(query, describer);
+function getTargetFields(
+  query: DumpQuery,
+  describer: Describer,
+  options: DumpOptions,
+) {
+  const fieldDefs = getTargetFieldDefinitions(query, describer, options);
   return fieldDefs.map((f) => f.name);
 }
 
@@ -70,7 +102,7 @@ async function queryRecords(
   describer: Describer,
   options: DumpOptions,
 ) {
-  const fields = getTargetFields(query, describer);
+  const fields = getTargetFields(query, describer, options);
   let soql = `SELECT ${fields.join(', ')} FROM ${query.object}`;
   soql += query.scope ? ` USING SCOPE ${query.scope}` : '';
   soql += query.condition ? ` WHERE ${query.condition}` : '';
@@ -153,7 +185,7 @@ async function fetchDependentRecords(
   describer: Describer,
   options: DumpOptions,
 ) {
-  const fields = getTargetFields(query, describer);
+  const fields = getTargetFields(query, describer, options);
   const fetchingIds = getFetchingIds(
     query.object,
     fetchedRecordsMap,
@@ -248,7 +280,7 @@ async function fetchRelatedRecords(
   describer: Describer,
   options: DumpOptions,
 ) {
-  const fields = getTargetFields(query, describer);
+  const fields = getTargetFields(query, describer, options);
   const parentRelationsMap = getParentRelationsMap(
     query.object,
     newlyFetchedIdsMap,
@@ -340,7 +372,7 @@ async function dumpRecordsAsCSV(
     : undefined;
   return Promise.all(
     queries.map(async (query) => {
-      const fieldDefs = getTargetFieldDefinitions(query, describer);
+      const fieldDefs = getTargetFieldDefinitions(query, describer, options);
       const columns = fieldDefs.map((f) => ({
         // as the records are fetched with no default-namespced field name
         key: options.defaultNamespace
